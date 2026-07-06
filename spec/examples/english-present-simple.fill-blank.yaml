@@ -1,0 +1,53 @@
+# yaml-language-server: $schema=../quiz.schema.json
+schema_version: "0.1"
+
+metadata:
+  id: english-present-simple-fill
+  title: "Present Simple — Fill in the Blank"
+  path: "English / Verb system / Present simple"
+  description: "Write or select the missing word(s)."
+  language: en
+  tags: [grammar, fill_blank, a2]
+
+categories:
+  - { id: form, label: "Verb form" }
+
+questions:
+  # Free-text blank, single word.
+  - id: q1
+    type: fill_blank
+    category: form
+    prompt: "She {{1}} to school every day."
+    blanks:
+      "1": { accept: ["goes"] }
+
+  # Two blanks in one sentence (the "pair of words" case), with synonyms.
+  - id: q2
+    type: fill_blank
+    category: form
+    prompt: "They {{1}} early and {{2}} breakfast together."
+    blanks:
+      "1": { accept: ["wake up", "get up"] }
+      "2": { accept: ["eat", "have"] }
+    explanation: "Both *eat* and *have* work with *breakfast*."
+
+  # Choice-per-blank variant: select the missing word.
+  - id: q3
+    type: fill_blank
+    category: form
+    prompt: "He {{1}} happy today."
+    blanks:
+      "1":
+        options:
+          - { id: a, text: "is" }
+          - { id: b, text: "are" }
+          - { id: c, text: "am" }
+        answer: a
+
+  # Case-sensitive blank (e.g. a proper noun).
+  - id: q4
+    type: fill_blank
+    category: form
+    prompt: "The capital of France is {{1}}."
+    blanks:
+      "1": { accept: ["Paris"], case_sensitive: true }

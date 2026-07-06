@@ -1,0 +1,36 @@
+# yaml-language-server: $schema=../quiz.schema.json
+schema_version: "0.1"
+
+metadata:
+  id: english-word-order
+  title: "Word Order — Build the Sentence"
+  path: "English / Grammar / Word order"
+  language: en
+  tags: [grammar, ordering, a2]
+
+categories:
+  - { id: word_order, label: "Word order" }
+
+questions:
+  - id: q1
+    type: ordering
+    category: word_order
+    prompt: "Put the words in the correct order to form a sentence."
+    items:
+      - { id: a, text: "always" }
+      - { id: b, text: "She" }
+      - { id: c, text: "coffee" }
+      - { id: d, text: "drinks" }
+    answer: [b, a, d, c]
+    explanation: "Adverbs of frequency go **before** the main verb: *She always drinks coffee.*"
+
+  - id: q2
+    type: ordering
+    category: word_order
+    prompt: "Order the steps of the writing process."
+    items:
+      - { id: s1, text: "Draft" }
+      - { id: s2, text: "Brainstorm" }
+      - { id: s3, text: "Revise" }
+      - { id: s4, text: "Publish" }
+    answer: [s2, s1, s3, s4]

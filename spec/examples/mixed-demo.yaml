@@ -1,0 +1,114 @@
+# yaml-language-server: $schema=../quiz.schema.json
+#
+# Kitchen-sink demo: every question type in one quiz, plus settings,
+# option_groups, categories, and per-question categories for statistics.
+schema_version: "0.1"
+
+metadata:
+  id: mixed-demo
+  title: "Format Showcase — All Question Types"
+  path: "Demos / Kensai Quiz / All types"
+  description: >
+    Demonstrates all seven question types together. Useful as a reference and as a
+    fixture for validators and renderers.
+  language: en
+  author: "kensai-quiz-core"
+  tags: [demo, reference]
+
+settings:
+  navigation: sequential
+  order: fixed
+  feedback: immediate
+  time_limit: 600
+  shuffle_options: false
+  passing_score: 0.6
+
+categories:
+  - { id: grammar, label: "Grammar" }
+  - { id: vocab,   label: "Vocabulary" }
+  - { id: logic,   label: "Logic" }
+
+option_groups:
+  parts_of_speech:
+    - { id: adj,  text: "Adjective" }
+    - { id: verb, text: "Verb" }
+    - { id: noun, text: "Noun" }
+
+questions:
+  # 1. choice (single) using a shared option group
+  - id: q1
+    type: choice
+    select: single
+    category: grammar
+    prompt: "What part of speech is *run* in *\"I run daily\"*?"
+    options_from: parts_of_speech
+    answer: [verb]
+    explanation: "Here *run* is the action, so it is a **verb**."
+
+  # 2. true_false
+  - id: q2
+    type: true_false
+    category: grammar
+    prompt: "An adverb can modify a verb."
+    answer: true
+
+  # 3. fill_blank (mixed: free text + choice-per-blank)
+  - id: q3
+    type: fill_blank
+    category: grammar
+    prompt: "She {{1}} to work and {{2}} always on time."
+    blanks:
+      "1": { accept: ["drives", "walks", "goes"] }
+      "2":
+        options:
+          - { id: a, text: "is" }
+          - { id: b, text: "are" }
+        answer: a
+
+  # 4. classify (inline groups)
+  - id: q4
+    type: classify
+    category: vocab
+    prompt: "Group the words by meaning."
+    groups:
+      - { id: hot,  label: "Hot" }
+      - { id: cold, label: "Cold" }
+    items:
+      - { id: w1, text: "freezing", answer: cold }
+      - { id: w2, text: "boiling",  answer: hot }
+      - { id: w3, text: "chilly",   answer: cold }
+      - { id: w4, text: "scorching", answer: hot }
+
+  # 5. matching
+  - id: q5
+    type: matching
+    category: vocab
+    prompt: "Match each country with its capital."
+    left:
+      - { id: l1, text: "France" }
+      - { id: l2, text: "Japan" }
+      - { id: l3, text: "Egypt" }
+    right:
+      - { id: r1, text: "Cairo" }
+      - { id: r2, text: "Paris" }
+      - { id: r3, text: "Tokyo" }
+    answer: { l1: r2, l2: r3, l3: r1 }
+
+  # 6. ordering
+  - id: q6
+    type: ordering
+    category: logic
+    prompt: "Order the numbers from smallest to largest."
+    items:
+      - { id: a, text: "42" }
+      - { id: b, text: "7" }
+      - { id: c, text: "19" }
+      - { id: d, text: "3" }
+    answer: [d, b, c, a]
+
+  # 7. short_answer
+  - id: q7
+    type: short_answer
+    category: vocab
+    prompt: "What is the plural of *mouse* (the animal)?"
+    accept: ["mice"]

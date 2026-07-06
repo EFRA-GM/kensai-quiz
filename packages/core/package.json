@@ -1,0 +1,48 @@
+{
+  "name": "@kensai/quiz-core",
+  "version": "0.1.0",
+  "description": "Headless, UI-agnostic engine for the Kensai Quiz format: load, validate, evaluate answers, run an attempt, and compute per-category statistics.",
+  "type": "module",
+  "license": "MIT",
+  "keywords": ["quiz", "assessment", "education", "yaml", "json-schema", "headless"],
+  "homepage": "https://github.com/EFRA-GM/kensai-quiz#readme",
+  "bugs": { "url": "https://github.com/EFRA-GM/kensai-quiz/issues" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EFRA-GM/kensai-quiz.git",
+    "directory": "packages/core"
+  },
+  "publishConfig": { "access": "public" },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
+  "files": ["dist"],
+  "scripts": {
+    "sync:schema": "node scripts/sync-schema.mjs",
+    "prebuild": "node scripts/sync-schema.mjs",
+    "build": "tsc -p tsconfig.json",
+    "pretest": "node scripts/sync-schema.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "pretypecheck": "node scripts/sync-schema.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.8"
+  }
+}

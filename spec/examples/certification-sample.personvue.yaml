@@ -1,0 +1,71 @@
+# yaml-language-server: $schema=../quiz.schema.json
+schema_version: "0.1"
+
+metadata:
+  id: cloud-fundamentals-sample
+  title: "Cloud Fundamentals — Practice Exam (Sample)"
+  path: "Certifications / Cloud Fundamentals / Practice exam"
+  description: >
+    A PersonVUE-style practice set. Time-limited, feedback withheld until the end,
+    fixed order — closer to real exam conditions.
+  language: en
+  author: "Community"
+  tags: [certification, exam, practice]
+
+settings:
+  navigation: sequential
+  order: fixed
+  feedback: on_finish
+  time_limit: 900          # 15 minutes
+  passing_score: 0.7
+
+categories:
+  - { id: compute,  label: "Compute" }
+  - { id: storage,  label: "Storage" }
+  - { id: security, label: "Security" }
+
+questions:
+  - id: q1
+    type: choice
+    select: single
+    category: compute
+    points: 1
+    prompt: >
+      A team needs to run short-lived, event-driven code without managing servers.
+      Which model best fits?
+    options:
+      - { id: a, text: "Dedicated bare-metal servers" }
+      - { id: b, text: "Serverless functions" }
+      - { id: c, text: "A always-on virtual machine cluster" }
+      - { id: d, text: "A container registry" }
+    answer: [b]
+    explanation: "Serverless functions scale to zero and are billed per invocation."
+
+  - id: q2
+    type: choice
+    select: multiple
+    category: storage
+    prompt: "Which are characteristics of **object storage**? (Select two.)"
+    options:
+      - { id: a, text: "Flat namespace with unique keys" }
+      - { id: b, text: "Block-level random writes" }
+      - { id: c, text: "Accessed over HTTP(S) APIs" }
+      - { id: d, text: "Mounted as a local filesystem by default" }
+    answer: [a, c]
+
+  - id: q3
+    type: true_false
+    category: security
+    prompt: "The principle of least privilege grants users the **minimum** access they need."
+    answer: true
+
+  - id: q4
+    type: choice
+    select: single
+    category: security
+    prompt: "What does encryption **at rest** protect?"
+    options:
+      - { id: a, text: "Data traveling across the network" }
+      - { id: b, text: "Data stored on disk" }
+      - { id: c, text: "Data displayed on screen" }
+    answer: [b]

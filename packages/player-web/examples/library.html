@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kensai Quiz — Library (playground) demo</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; padding: 2rem 1rem; background: #f3f4f6; }
+      h1 { text-align: center; font-size: 1.1rem; color: #374151; }
+      p.hint { text-align: center; color: #6b7280; font-size: 0.85rem; max-width: 40rem; margin: 0 auto 1.5rem; }
+      #app { --kq-accent: #7c3aed; }
+    </style>
+  </head>
+  <body>
+    <h1>Playground — the learner brings their own quizzes</h1>
+    <p class="hint">
+      Upload a <code>.yaml</code> file, paste one below, or use <strong>✨ Create with AI</strong>
+      to generate a prompt for your favorite LLM chat. Saved quizzes live only in this browser
+      (localStorage) and can be replayed any time. The ☀/🌙 theme and ⛶ fullscreen toggles are
+      in the header. Try pasting the sample from <code>examples/cdn.html</code>.
+    </p>
+
+    <!-- The consumer drops a div with an id … -->
+    <div id="app"></div>
+
+    <!-- … includes the self-contained build (a CDN URL in production) … -->
+    <script src="../dist/kensai-quiz-player.global.js"></script>
+
+    <!-- … and renders the library shell with a single call. -->
+    <script>
+      KensaiQuiz.library("#app", {
+        title: "My quizzes",
+        // The learner may tweak these per quiz and while playing. "shuffle" is a
+        // single toggle for both question order and answer options.
+        editableSettings: ["navigation", "feedback", "shuffle", "time_limit"],
+      });
+    </script>
+  </body>
+</html>

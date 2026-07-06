@@ -1,0 +1,9 @@
+packages:
+  - "packages/*"
+
+allowBuilds:
+  esbuild: set this to true or false
+
+# Allow esbuild (used by vitest) to run its postinstall that fetches the platform binary.
+onlyBuiltDependencies:
+  - esbuild

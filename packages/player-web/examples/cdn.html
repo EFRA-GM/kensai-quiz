@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kensai Quiz — CDN demo</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; padding: 2rem 1rem; background: #f3f4f6; }
+      h1 { text-align: center; font-size: 1.1rem; color: #374151; }
+      /* Optional: theme the player via CSS variables */
+      #quiz { --kq-accent: #0ea5e9; }
+    </style>
+  </head>
+  <body>
+    <h1>Embedded with a single &lt;script&gt; tag</h1>
+
+    <!-- 1. The consumer just drops a div with an id -->
+    <div id="quiz"></div>
+
+    <!-- 2. Include the self-contained player build.
+         In production this is a CDN URL, e.g.
+         <script src="https://cdn.jsdelivr.net/npm/@kensai/quiz-player/dist/kensai-quiz-player.global.js"></script> -->
+    <script src="../dist/kensai-quiz-player.global.js"></script>
+
+    <!-- 3. Author the quiz as YAML and init the player -->
+    <script>
+      const quiz = `
+schema_version: "0.1"
+metadata:
+  title: "Present Simple — Quick Check"
+  path: "English / Verb system / Present simple"
+  description: "A 4-question warm-up. *Immediate* feedback is on."
+settings:
+  navigation: sequential
+  feedback: immediate
+  passing_score: 0.5
+categories:
+  - { id: grammar, label: "Grammar" }
+  - { id: vocab, label: "Vocabulary" }
+questions:
+  - type: choice
+    category: grammar
+    prompt: "She ___ to work every day."
+    options:
+      - { id: a, text: "go" }
+      - { id: b, text: "goes" }
+      - { id: c, text: "going" }
+    answer: [b]
+    explanation: "Third person singular adds **-es**: *goes*."
+  - type: true_false
+    category: grammar
+    prompt: "\\"They plays football\\" is correct."
+    answer: false
+    explanation: "With *they* the verb has no -s: **they play**."
+  - type: fill_blank
+    category: grammar
+    prompt: "I {{1}} coffee but she {{2}} tea."
+    blanks:
+      "1": { accept: ["drink"] }
+      "2":
+        options: [ { id: x, text: "drink" }, { id: y, text: "drinks" } ]
+        answer: y
+  - type: short_answer
+    category: vocab
+    prompt: "What is the opposite of *fast*?"
+    accept: ["slow"]
+`;
+
+      KensaiQuiz.init("#quiz", {
+        quiz,
+        // Let the learner tweak a whitelisted subset via the ⚙ gear (omit to lock).
+        // "shuffle" is one toggle for both question order and answer options.
+        editableSettings: ["feedback", "shuffle"],
+        // A ⛶ fullscreen toggle shows automatically when the browser supports it.
+        onFinish: (result) => console.log("Finished:", result.score, "/", result.maxScore),
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,69 @@
+# yaml-language-server: $schema=../quiz.schema.json
+schema_version: "0.1"
+
+metadata:
+  id: english-multiple-choice
+  title: "Vocabulary & Grammar — Multiple Choice"
+  path: "English / Mixed practice / Multiple choice"
+  language: en
+  tags: [vocabulary, grammar, choice]
+
+settings:
+  feedback: immediate      # reveal after each question
+  shuffle_options: true
+
+categories:
+  - { id: vocab,   label: "Vocabulary" }
+  - { id: grammar, label: "Grammar" }
+
+questions:
+  # Single-select.
+  - id: q1
+    type: choice
+    select: single
+    category: grammar
+    prompt: "Choose the correct form: *She ___ coffee every morning.*"
+    options:
+      - { id: a, text: "drink" }
+      - { id: b, text: "drinks" }
+      - { id: c, text: "drinking" }
+    answer: [b]
+    explanation: "Third-person singular takes **-s** in the present simple."
+
+  # Multiple-select (more than one correct id).
+  - id: q2
+    type: choice
+    select: multiple
+    category: vocab
+    prompt: "Which of these are **synonyms** of *happy*? (Select all that apply.)"
+    options:
+      - { id: a, text: "glad" }
+      - { id: b, text: "cheerful" }
+      - { id: c, text: "tired" }
+      - { id: d, text: "content" }
+    answer: [a, b, d]
+
+  # Single-select with a scalar answer (shorthand allowed for single).
+  - id: q3
+    type: choice
+    category: vocab
+    prompt: "What is the opposite of *ancient*?"
+    options:
+      - { id: a, text: "old" }
+      - { id: b, text: "modern" }
+      - { id: c, text: "historic" }
+    answer: b
+
+  # An "All of the above" option references position, so lock this question's order
+  # even though the quiz shuffles options globally.
+  - id: q4
+    type: choice
+    category: grammar
+    shuffle_options: false
+    prompt: "Which sentences are grammatically correct?"
+    options:
+      - { id: a, text: "She goes to work." }
+      - { id: b, text: "They play football." }
+      - { id: c, text: "I am tired." }
+      - { id: d, text: "All of the above" }
+    answer: d

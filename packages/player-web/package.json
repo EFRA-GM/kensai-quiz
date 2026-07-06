@@ -1,0 +1,52 @@
+{
+  "name": "@kensai/quiz-player",
+  "version": "0.2.0",
+  "description": "Embeddable, framework-free web player for the Kensai Quiz format. Use via npm (import) or a single CDN <script> — then KensaiQuiz.init('#el', { quiz }).",
+  "type": "module",
+  "license": "MIT",
+  "keywords": ["quiz", "player", "widget", "embeddable", "cdn", "education"],
+  "homepage": "https://github.com/EFRA-GM/kensai-quiz/tree/master/packages/player-web#readme",
+  "bugs": { "url": "https://github.com/EFRA-GM/kensai-quiz/issues" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EFRA-GM/kensai-quiz.git",
+    "directory": "packages/player-web"
+  },
+  "publishConfig": { "access": "public" },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "unpkg": "./dist/kensai-quiz-player.global.js",
+  "jsdelivr": "./dist/kensai-quiz-player.global.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./global": "./dist/kensai-quiz-player.global.js"
+  },
+  "sideEffects": false,
+  "files": ["dist"],
+  "scripts": {
+    "sync:guide": "node scripts/sync-guide.mjs",
+    "prebuild": "node scripts/sync-guide.mjs",
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "serve": "node scripts/serve.mjs",
+    "pretest": "node scripts/sync-guide.mjs",
+    "test": "vitest run",
+    "pretypecheck": "node scripts/sync-guide.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "@kensai/quiz-core": "workspace:*"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.8"
+  }
+}

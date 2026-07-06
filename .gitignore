@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Generated (regenerated from spec/quiz.schema.json via `pnpm sync:schema`)
+packages/core/src/schema.generated.ts
+
+# Generated (regenerated from spec/AI_AUTHORING_GUIDE.md via `pnpm sync:guide`)
+packages/player-web/src/ai-guide.generated.ts
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

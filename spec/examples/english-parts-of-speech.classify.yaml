@@ -1,0 +1,48 @@
+# yaml-language-server: $schema=../quiz.schema.json
+schema_version: "0.1"
+
+metadata:
+  id: english-parts-of-speech
+  title: "Parts of Speech"
+  path: "English / Grammar / Parts of speech"
+  description: "Classify words from a sentence into their part of speech."
+  language: en
+  tags: [grammar, classify, a2]
+
+categories:
+  - { id: pos, label: "Parts of speech" }
+
+# Reusable buckets, shared by every classify question below.
+option_groups:
+  parts_of_speech:
+    - { id: adj,  text: "Adjective" }
+    - { id: verb, text: "Verb" }
+    - { id: noun, text: "Noun" }
+    - { id: adv,  text: "Adverb" }
+
+questions:
+  - id: q1
+    type: classify
+    category: pos
+    prompt: "Classify each **highlighted** word by its part of speech."
+    groups_from: parts_of_speech
+    items:
+      - { id: w1, text: "beautiful", answer: adj }
+      - { id: w2, text: "quickly",   answer: adv }
+      - { id: w3, text: "garden",    answer: noun }
+      - { id: w4, text: "run",       answer: verb }
+
+  - id: q2
+    type: classify
+    category: pos
+    prompt: "Sort the words of *\"The happy dog barks loudly\"* into their roles."
+    groups:
+      - { id: subject, label: "Subject" }
+      - { id: verb,    label: "Verb" }
+      - { id: modifier, label: "Modifier" }
+    items:
+      - { id: t1, text: "dog",    answer: subject }
+      - { id: t2, text: "barks",  answer: verb }
+      - { id: t3, text: "happy",  answer: modifier }
+      - { id: t4, text: "loudly", answer: modifier }
+    explanation: "*happy* modifies the noun (adjective); *loudly* modifies the verb (adverb)."

@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=../quiz.schema.json
+schema_version: "0.1"
+
+metadata:
+  id: english-vocab-short-answer
+  title: "Vocabulary — Short Answer"
+  path: "English / Vocabulary / Short answer"
+  language: en
+  tags: [vocabulary, short_answer]
+
+categories:
+  - { id: verbs, label: "Verb forms" }
+  - { id: nouns, label: "Nouns" }
+
+questions:
+  - id: q1
+    type: short_answer
+    category: verbs
+    prompt: "Write the past tense of *go*."
+    accept: ["went"]
+
+  - id: q2
+    type: short_answer
+    category: nouns
+    prompt: "What is the plural of *child*?"
+    accept: ["children"]
+    explanation: "*child* has an irregular plural."
+
+  - id: q3
+    type: short_answer
+    category: verbs
+    prompt: "Give a synonym of *buy* (base form)."
+    accept: ["purchase", "acquire"]
+    case_sensitive: false

@@ -1,0 +1,355 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kensai/quiz-core/spec/quiz.schema.json",
+  "title": "Kensai Quiz",
+  "description": "Specification for a single, portable, AI-authorable quiz (schema version 0.1).",
+  "type": "object",
+  "required": ["schema_version", "metadata", "questions"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "0.1",
+      "description": "Spec version this file targets. Enables backward compatibility."
+    },
+    "metadata": { "$ref": "#/$defs/metadata" },
+    "settings": { "$ref": "#/$defs/settings" },
+    "categories": {
+      "type": "array",
+      "description": "Optional registry of categories used for end-of-quiz statistics.",
+      "items": { "$ref": "#/$defs/category" }
+    },
+    "option_groups": {
+      "type": "object",
+      "description": "Reusable named option sets. Reference them from questions via `options_from` / `groups_from`.",
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 1,
+        "items": { "$ref": "#/$defs/option" }
+      }
+    },
+    "questions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/question" }
+    }
+  },
+
+  "$defs": {
+    "metadata": {
+      "type": "object",
+      "required": ["title"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "description": "Optional stable slug." },
+        "title": { "type": "string", "description": "Human title (Markdown)." },
+        "path": {
+          "type": "string",
+          "description": "Study-path breadcrumb, e.g. 'English / Verb system / Present tenses'."
+        },
+        "description": { "type": "string", "description": "Optional overview (Markdown)." },
+        "language": {
+          "type": "string",
+          "description": "BCP-47 content language tag, e.g. 'en', 'es'. Default: 'und'."
+        },
+        "author": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "settings": {
+      "type": "object",
+      "description": "All fields optional. Author defaults; a player may override per attempt.",
+      "additionalProperties": false,
+      "properties": {
+        "navigation": {
+          "enum": ["all", "sequential"],
+          "default": "all",
+          "description": "'all' shows every question at once; 'sequential' advances one by one."
+        },
+        "order": {
+          "enum": ["fixed", "random"],
+          "default": "fixed",
+          "description": "Order in which questions are presented ('random' shuffles them)."
+        },
+        "feedback": {
+          "enum": ["immediate", "on_finish"],
+          "default": "on_finish",
+          "description": "Reveal correctness/explanation per question or only at the end."
+        },
+        "time_limit": {
+          "type": ["number", "null"],
+          "minimum": 1,
+          "default": null,
+          "description": "Seconds allowed. null or omitted = unlimited."
+        },
+        "shuffle_options": {
+          "type": "boolean",
+          "default": false,
+          "description": "Shuffle the answer-option order of choice questions, except those that set `shuffle_options: false`."
+        },
+        "passing_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Pass threshold as a fraction 0..1."
+        }
+      }
+    },
+
+    "category": {
+      "type": "object",
+      "required": ["id", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string", "description": "Display label (Markdown)." }
+      }
+    },
+
+    "option": {
+      "type": "object",
+      "required": ["id", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "description": "Unique within its option list." },
+        "text": { "type": "string", "description": "Option text (Markdown)." }
+      }
+    },
+
+    "group": {
+      "type": "object",
+      "required": ["id", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string", "description": "Bucket label (Markdown)." }
+      }
+    },
+
+    "id_or_id_list": {
+      "description": "A single id or a list of ids.",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "minItems": 1, "items": { "type": "string" } }
+      ]
+    },
+
+    "question": {
+      "type": "object",
+      "required": ["type", "prompt"],
+      "properties": {
+        "id": { "type": "string", "description": "Recommended: stable id for stats/resume." },
+        "type": {
+          "enum": [
+            "choice",
+            "true_false",
+            "fill_blank",
+            "classify",
+            "matching",
+            "ordering",
+            "short_answer"
+          ]
+        },
+        "category": {
+          "type": "string",
+          "description": "References a categories[].id, or a free-form string."
+        },
+        "points": { "type": "number", "minimum": 0, "default": 1 },
+        "prompt": { "type": "string", "description": "Question text (Markdown)." },
+        "explanation": { "type": "string", "description": "Optional rationale (Markdown)." }
+      },
+      "oneOf": [
+        { "$ref": "#/$defs/q_choice" },
+        { "$ref": "#/$defs/q_true_false" },
+        { "$ref": "#/$defs/q_fill_blank" },
+        { "$ref": "#/$defs/q_classify" },
+        { "$ref": "#/$defs/q_matching" },
+        { "$ref": "#/$defs/q_ordering" },
+        { "$ref": "#/$defs/q_short_answer" }
+      ]
+    },
+
+    "q_choice": {
+      "properties": {
+        "type": { "const": "choice" },
+        "id": true, "category": true, "points": true, "prompt": true, "explanation": true,
+        "select": {
+          "enum": ["single", "multiple"],
+          "default": "single"
+        },
+        "options": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/option" }
+        },
+        "options_from": {
+          "type": "string",
+          "description": "Name of an entry in option_groups."
+        },
+        "answer": { "$ref": "#/$defs/id_or_id_list" },
+        "shuffle_options": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether these options may be reordered when the quiz enables option shuffling. Default true; set false to lock the order (e.g. an 'All of the above' option, or options like 'Both A and B')."
+        }
+      },
+      "required": ["type", "prompt", "answer"],
+      "oneOf": [
+        { "required": ["options"], "not": { "required": ["options_from"] } },
+        { "required": ["options_from"], "not": { "required": ["options"] } }
+      ],
+      "additionalProperties": false
+    },
+
+    "q_true_false": {
+      "properties": {
+        "type": { "const": "true_false" },
+        "id": true, "category": true, "points": true, "prompt": true, "explanation": true,
+        "answer": { "type": "boolean" }
+      },
+      "required": ["type", "prompt", "answer"],
+      "additionalProperties": false
+    },
+
+    "q_fill_blank": {
+      "properties": {
+        "type": { "const": "fill_blank" },
+        "id": true, "category": true, "points": true, "prompt": true, "explanation": true,
+        "blanks": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Map of placeholder id ({{id}} in prompt) to a blank definition.",
+          "additionalProperties": { "$ref": "#/$defs/blank" }
+        }
+      },
+      "required": ["type", "prompt", "blanks"],
+      "additionalProperties": false
+    },
+
+    "blank": {
+      "type": "object",
+      "description": "A blank is either free-text (accept) or a per-blank choice (options + answer).",
+      "additionalProperties": false,
+      "properties": {
+        "accept": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "Accepted free-text answers (synonyms)."
+        },
+        "case_sensitive": { "type": "boolean", "default": false },
+        "options": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/option" }
+        },
+        "answer": {
+          "type": "string",
+          "description": "Correct option id (choice-per-blank variant)."
+        }
+      },
+      "oneOf": [
+        { "required": ["accept"], "not": { "required": ["options"] } },
+        { "required": ["options", "answer"], "not": { "required": ["accept"] } }
+      ]
+    },
+
+    "q_classify": {
+      "properties": {
+        "type": { "const": "classify" },
+        "id": true, "category": true, "points": true, "prompt": true, "explanation": true,
+        "groups": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/group" }
+        },
+        "groups_from": {
+          "type": "string",
+          "description": "Name of an entry in option_groups (its options act as buckets: id + text)."
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "text", "answer"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "text": { "type": "string", "description": "Item text (Markdown)." },
+              "answer": { "type": "string", "description": "Target group id." }
+            }
+          }
+        }
+      },
+      "required": ["type", "prompt", "items"],
+      "oneOf": [
+        { "required": ["groups"], "not": { "required": ["groups_from"] } },
+        { "required": ["groups_from"], "not": { "required": ["groups"] } }
+      ],
+      "additionalProperties": false
+    },
+
+    "q_matching": {
+      "properties": {
+        "type": { "const": "matching" },
+        "id": true, "category": true, "points": true, "prompt": true, "explanation": true,
+        "left": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/option" }
+        },
+        "right": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/option" }
+        },
+        "answer": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "Map of left id -> right id.",
+          "additionalProperties": { "type": "string" }
+        }
+      },
+      "required": ["type", "prompt", "left", "right", "answer"],
+      "additionalProperties": false
+    },
+
+    "q_ordering": {
+      "properties": {
+        "type": { "const": "ordering" },
+        "id": true, "category": true, "points": true, "prompt": true, "explanation": true,
+        "items": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/option" }
+        },
+        "answer": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "type": "string" },
+          "description": "Item ids in the correct order."
+        }
+      },
+      "required": ["type", "prompt", "items", "answer"],
+      "additionalProperties": false
+    },
+
+    "q_short_answer": {
+      "properties": {
+        "type": { "const": "short_answer" },
+        "id": true, "category": true, "points": true, "prompt": true, "explanation": true,
+        "accept": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "Accepted answers (synonyms)."
+        },
+        "case_sensitive": { "type": "boolean", "default": false }
+      },
+      "required": ["type", "prompt", "accept"],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=../quiz.schema.json
+schema_version: "0.1"
+
+metadata:
+  id: english-irregular-past
+  title: "Irregular Verbs — Match the Past Form"
+  path: "English / Verb system / Irregular verbs"
+  language: en
+  tags: [grammar, matching, a2]
+
+categories:
+  - { id: irregular, label: "Irregular verbs" }
+
+questions:
+  - id: q1
+    type: matching
+    category: irregular
+    prompt: "Match each base verb with its **past simple** form."
+    left:
+      - { id: l1, text: "go" }
+      - { id: l2, text: "eat" }
+      - { id: l3, text: "buy" }
+      - { id: l4, text: "see" }
+    right:
+      - { id: r1, text: "went" }
+      - { id: r2, text: "ate" }
+      - { id: r3, text: "bought" }
+      - { id: r4, text: "saw" }
+    answer:
+      l1: r1
+      l2: r2
+      l3: r3
+      l4: r4
+    explanation: "These are all irregular — the past form is not formed with *-ed*."
