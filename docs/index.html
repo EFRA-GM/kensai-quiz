@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kensai Quiz — Playground</title>
+    <meta
+      name="description"
+      content="Try the Kensai Quiz player in your browser: upload or paste a quiz, or generate one with AI. Nothing to install."
+    />
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        margin: 0;
+        padding: 2rem 1rem 3rem;
+        background: #f3f4f6;
+        color: #111827;
+      }
+      @media (prefers-color-scheme: dark) {
+        body { background: #0f0f17; color: #e5e7eb; }
+      }
+      header { max-width: 40rem; margin: 0 auto 1.5rem; text-align: center; }
+      h1 { font-size: 1.5rem; margin: 0 0 0.4rem; }
+      header p { color: #6b7280; font-size: 0.95rem; margin: 0.25rem 0; }
+      header a { color: #7c3aed; }
+      #app { --kq-accent: #7c3aed; }
+      footer {
+        max-width: 40rem;
+        margin: 2rem auto 0;
+        text-align: center;
+        color: #6b7280;
+        font-size: 0.85rem;
+      }
+      footer a { color: #7c3aed; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Kensai Quiz — Playground</h1>
+      <p>
+        Upload a <code>.yaml</code> file, paste one, or use <strong>✨ Create with AI</strong> to
+        generate a prompt for your favorite chat. Your quizzes are saved only in this browser.
+      </p>
+      <p>Nothing to install — this whole page is one <code>&lt;script&gt;</code> tag.</p>
+    </header>
+
+    <div id="app"></div>
+
+    <!-- The self-contained player, straight from the CDN. -->
+    <script src="https://cdn.jsdelivr.net/npm/@kensai/quiz-player@0.2.0/dist/kensai-quiz-player.global.js"></script>
+    <script>
+      KensaiQuiz.library("#app", {
+        title: "My quizzes",
+        // The learner may tweak these per quiz and while playing. "shuffle" is a single
+        // toggle for both question order and answer options.
+        editableSettings: ["navigation", "feedback", "shuffle", "time_limit"],
+      });
+    </script>
+
+    <footer>
+      Built with
+      <a href="https://github.com/EFRA-GM/kensai-quiz">kensai-quiz</a>
+      · <a href="https://www.npmjs.com/package/@kensai/quiz-player">@kensai/quiz-player</a>
+    </footer>
+  </body>
+</html>

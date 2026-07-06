@@ -5,6 +5,8 @@ Drop a `<div>`, call `init`, and it renders a full quiz — questions, navigatio
 feedback, timer, results, and per-category review. It has no framework dependency and
 consumes [`@kensai/quiz-core`](../core) for all logic (loading, validation, scoring).
 
+**▶️ Try the playground live (no install): [efra-gm.github.io/kensai-quiz](https://efra-gm.github.io/kensai-quiz/)**
+
 Two ways to use it, for the two ways people run quizzes:
 
 - **`init` — controlled.** The developer owns the quiz and its behavior; the learner

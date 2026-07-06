@@ -17,7 +17,25 @@ choice) and PearsonVUE-style certification practice exams.
                                      (or your own UI)
 ```
 
-## Try it in 30 seconds
+## Try it live — no install
+
+▶️ [Try it](https://efra-gm.github.io/kensai-quiz/) — runs entirely in your browser: upload or paste a quiz, or generate one with AI, and play it.
+
+Or embed the player anywhere with a single tag:
+
+```html
+<div id="quiz"></div>
+<script src="https://cdn.jsdelivr.net/npm/@kensai/quiz-player@0.2.0/dist/kensai-quiz-player.global.js"></script>
+<script>KensaiQuiz.init("#quiz", { quiz: `schema_version: "0.1"
+metadata: { title: "Quick Check" }
+questions:
+  - type: choice
+    prompt: "She ___ to work."
+    options: [ { id: a, text: "go" }, { id: b, text: "goes" } ]
+    answer: [b]` });</script>
+```
+
+## Try it in 30 seconds (local)
 
 Requires [Node](https://nodejs.org) ≥ 18 and [pnpm](https://pnpm.io).
 

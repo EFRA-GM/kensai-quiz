@@ -23,8 +23,9 @@
     <!-- The consumer drops a div with an id … -->
     <div id="app"></div>
 
-    <!-- … includes the self-contained build (a CDN URL in production) … -->
-    <script src="../dist/kensai-quiz-player.global.js"></script>
+    <!-- … includes the self-contained build from the CDN (use `@latest` for newest,
+         or `../dist/kensai-quiz-player.global.js` for local development) … -->
+    <script src="https://cdn.jsdelivr.net/npm/@kensai/quiz-player@0.2.0/dist/kensai-quiz-player.global.js"></script>
 
     <!-- … and renders the library shell with a single call. -->
     <script>
