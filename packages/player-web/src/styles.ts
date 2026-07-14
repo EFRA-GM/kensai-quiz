@@ -66,12 +66,24 @@ const CSS = `
 
 .kq-question-body { display: flex; flex-direction: column; gap: 0.5rem; }
 .kq-option { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.7rem; border: 1px solid var(--kq-border); border-radius: 10px; cursor: pointer; transition: border-color .15s, background .15s; }
-.kq-option:hover { border-color: var(--kq-accent); }
+/* Persistent selected state — works on touch (hover does not). */
+.kq-option:has(.kq-input:checked) { border-color: var(--kq-accent); background: color-mix(in srgb, var(--kq-accent) 12%, transparent); }
+/* Hover only on devices that truly hover, so it never "sticks" after a tap. */
+@media (hover: hover) { .kq-option:hover { border-color: var(--kq-accent); } }
 .kq-input { width: 1.05rem; height: 1.05rem; accent-color: var(--kq-accent); flex: none; }
 
 .kq-text { width: 100%; padding: 0.55rem 0.7rem; border: 1px solid var(--kq-border); border-radius: 10px; font: inherit; }
 .kq-text-inline { width: auto; min-width: 6rem; padding: 0.3rem 0.5rem; }
-.kq-select { padding: 0.4rem 0.55rem; border: 1px solid var(--kq-border); border-radius: 10px; font: inherit; background: var(--kq-bg); }
+/* Explicit color + custom caret so the chosen value shows reliably on mobile/dark,
+   where a fully-native select can render its text invisibly. */
+.kq-select {
+  padding: 0.4rem 1.9rem 0.4rem 0.55rem; border: 1px solid var(--kq-border); border-radius: 10px;
+  font: inherit; color: var(--kq-fg); background-color: var(--kq-bg);
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2012%2012'%3E%3Cpath%20d='M2%204l4%204%204-4'%20fill='none'%20stroke='%23888'%20stroke-width='1.5'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 0.55rem center; background-size: 0.7rem;
+}
+.kq-select option { color: var(--kq-fg); background: var(--kq-bg); }
 
 /* fill_blank: prompt with inputs embedded inline */
 .kq-fill-inline { font-size: 1.05rem; font-weight: 600; line-height: 2.3; margin: 0; }
@@ -90,6 +102,35 @@ const CSS = `
 .kq-move-group { display: inline-flex; gap: 0.25rem; }
 .kq-move { border: 1px solid var(--kq-border); background: var(--kq-bg); border-radius: 8px; width: 2rem; height: 2rem; cursor: pointer; font-size: 0.8rem; }
 .kq-move:disabled { opacity: 0.35; cursor: default; }
+
+/* view toggle: switch a question type's presentation (e.g. classify dropdown ⇄ word bank) */
+.kq-view-toggle { display: inline-flex; margin-bottom: 0.75rem; border: 1px solid var(--kq-border); border-radius: 10px; overflow: hidden; }
+.kq-view-btn { font: inherit; font-size: 0.82rem; padding: 0.3rem 0.7rem; border: 0; background: var(--kq-bg); color: var(--kq-muted); cursor: pointer; }
+.kq-view-btn + .kq-view-btn { border-left: 1px solid var(--kq-border); }
+.kq-view-btn.kq-active { background: var(--kq-accent); color: var(--kq-accent-fg); }
+
+/* classify "word bank" variant: chips in a pool up top, group drop-zones below */
+.kq-buckets { display: flex; flex-direction: column; gap: 0.75rem; }
+.kq-pool { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; min-height: 2.6rem; padding: 0.5rem; border: 1px dashed var(--kq-border); border-radius: 10px; }
+.kq-groups { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.kq-group { flex: 1 1 8rem; min-width: 8rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.kq-group-label { font-weight: 600; font-size: 0.9rem; }
+.kq-group-drop { display: flex; flex-wrap: wrap; gap: 0.4rem; align-content: flex-start; min-height: 3rem; padding: 0.5rem; border: 1px solid var(--kq-border); border-radius: 10px; }
+.kq-pool.kq-droppable, .kq-group-drop.kq-droppable { border-color: var(--kq-accent); background: color-mix(in srgb, var(--kq-accent) 8%, transparent); }
+.kq-pool:focus-visible, .kq-group-drop:focus-visible, .kq-chip:focus-visible { outline: 2px solid var(--kq-accent); outline-offset: 1px; }
+.kq-chip { font: inherit; font-size: 0.9rem; padding: 0.35rem 0.6rem; border: 1px solid var(--kq-border); border-radius: 999px; background: var(--kq-surface); color: var(--kq-fg); cursor: pointer; }
+.kq-chip.kq-selected { border-color: var(--kq-accent); background: var(--kq-accent); color: var(--kq-accent-fg); }
+.kq-chip:disabled { cursor: default; opacity: 0.7; }
+.kq-zone-empty { color: var(--kq-muted); }
+
+/* correct / incorrect coloring revealed after "Check" (immediate feedback).
+   Placed after the option/select rules so it wins on equal specificity. */
+.kq-option.kq-correct, .kq-row.kq-correct, .kq-ordering-item.kq-correct { border-color: var(--kq-correct); background: color-mix(in srgb, var(--kq-correct) 14%, transparent); }
+.kq-option.kq-incorrect, .kq-row.kq-incorrect, .kq-ordering-item.kq-incorrect { border-color: var(--kq-incorrect); background: color-mix(in srgb, var(--kq-incorrect) 14%, transparent); }
+.kq-text.kq-correct, .kq-select.kq-correct { border-color: var(--kq-correct); background-color: color-mix(in srgb, var(--kq-correct) 14%, transparent); }
+.kq-text.kq-incorrect, .kq-select.kq-incorrect { border-color: var(--kq-incorrect); background-color: color-mix(in srgb, var(--kq-incorrect) 14%, transparent); }
+.kq-chip.kq-correct { border-color: var(--kq-correct); background: var(--kq-correct); color: #fff; }
+.kq-chip.kq-incorrect { border-color: var(--kq-incorrect); background: var(--kq-incorrect); color: #fff; }
 
 .kq-feedback { margin-top: 0.85rem; padding: 0.7rem 0.85rem; border-radius: 10px; border-left: 4px solid var(--kq-border); background: var(--kq-surface); font-size: 0.92rem; }
 .kq-feedback.kq-is-correct { border-color: var(--kq-correct); }

@@ -1,7 +1,7 @@
 import { loadQuiz, QuizValidationError, type ResolvedSettings } from "@kensai/quiz-core";
 import { clear, el, mdEl, resolveTarget } from "./dom";
 import { injectStyles } from "./styles";
-import { QuizPlayer } from "./player";
+import { QuizPlayer, type PlayerOptions } from "./player";
 import { buildSettingsPanel, type EditableSettingKey } from "./settings-ui";
 import { readJSON, writeJSON } from "./storage";
 import { applyTheme, themeButton } from "./theme";
@@ -22,6 +22,10 @@ export interface LibraryOptions {
   title?: string;
   /** Settings the learner may tweak (per quiz and while playing). Defaults to all of them. */
   editableSettings?: EditableSettingKey[];
+  /** Default presentation variant per question type (e.g. `{ classify: "buckets" }`). */
+  views?: PlayerOptions["views"];
+  /** Whether the learner may switch a question's view. Default `true`. */
+  editableViews?: PlayerOptions["editableViews"];
   /** Show the ⛶ fullscreen toggle in the player. Default `true`. */
   fullscreen?: boolean;
   /** Validate quizzes on save/play. Default `true`. */
@@ -198,6 +202,8 @@ export class QuizLibrary {
       settings: quiz.settings,
       validate: this.options.validate,
       editableSettings: this.editableKeys(),
+      views: this.options.views,
+      editableViews: this.options.editableViews,
       fullscreen: this.options.fullscreen,
       now: this.options.now,
       rng: this.options.rng,

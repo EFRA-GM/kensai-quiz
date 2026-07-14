@@ -70,6 +70,15 @@ reflected in `spec/` and `packages/core`.
   (playground) exercise the CDN global.
 - Text is rendered via a **safe inline-Markdown** subset (`src/markdown.ts`) that escapes
   HTML first — keep that invariant when touching rendering.
+- **View variants**: a question type may offer more than one presentation, declared in
+  `VIEW_VARIANTS` (`src/views.ts`; e.g. `classify` = `dropdown` | `buckets`, the tap-to-place
+  "word bank"). A variant is just another builder that keeps the same
+  `getAnswer`/`setAnswer`/`setDisabled` contract, so core scoring is untouched. The player
+  resolves the active variant as: learner's saved per-quiz choice → developer default
+  (`PlayerOptions.views`) → first variant. Learner switching is on by default and can be
+  locked via `editableViews`; the choice is a UI-only preference persisted **per quiz** in
+  `localStorage` via `src/view-prefs.ts` (keyed `metadata.id ?? title`, mirroring `theme.ts`).
+  This is a player concern only — the spec/schema/core stay UI-agnostic.
 
 ## Format conventions (must follow)
 

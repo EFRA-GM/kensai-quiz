@@ -46,3 +46,4 @@ export type { PlayerOptions };
 export type { LibraryOptions };
 export type { EditableSettingKey } from "./settings-ui";
 export type { Theme } from "./theme";
+export { VIEW_VARIANTS, variantsFor, type ViewVariantDef } from "./views";

@@ -13,9 +13,10 @@ import {
 import { clear, el, mdEl } from "./dom";
 import { injectStyles } from "./styles";
 import { applyTheme, themeButton } from "./theme";
-import { createQuestionView, type QuestionView } from "./views";
+import { createQuestionView, variantsFor, type QuestionView } from "./views";
 import { correctAnswerText, userAnswerText } from "./answers";
 import { buildSettingsPanel, type EditableSettingKey } from "./settings-ui";
+import { setViewPref, storedViewPref } from "./view-prefs";
 
 export interface PlayerOptions {
   /** Quiz source: a YAML/JSON string or an already-parsed object. Optional — a
@@ -34,6 +35,13 @@ export interface PlayerOptions {
   /** Settings the learner may change through the ⚙️ gear. Omitted/empty = locked
    *  (the developer fully controls behavior and no gear is shown). */
   editableSettings?: EditableSettingKey[];
+  /** Default presentation variant per question type (see `VIEW_VARIANTS`), e.g.
+   *  `{ classify: "buckets" }`. Unknown ids fall back to the built-in default. */
+  views?: Partial<Record<Question["type"], string>>;
+  /** Whether the learner may switch a question type's view (a per-quiz, UI-only
+   *  preference — never affects scoring). `true` (default) shows a toggle wherever a
+   *  type has more than one view; `false` locks it; an array scopes it to some types. */
+  editableViews?: boolean | Question["type"][];
   /** Show a ⛶ fullscreen toggle when the browser supports it. Default `true`. */
   fullscreen?: boolean;
   /** Show a ☀/🌙 light-dark theme toggle. Default `true`. */
@@ -59,6 +67,9 @@ export class QuizPlayer {
   private _quiz: Quiz | null = null;
   private attempt: Attempt | null = null;
   private view: QuestionView | null = null;
+  /** Views currently mounted (one in sequential mode, many in "all" mode) — used to
+   *  preserve in-progress answers when the learner switches a question's view. */
+  private currentViews: { index: number; view: QuestionView }[] = [];
   private settingsOverride: Partial<ResolvedSettings>;
   private settingsOpen = false;
   private readonly checked = new Set<number>();
@@ -187,6 +198,7 @@ export class QuizPlayer {
   private render(): void {
     clear(this.root);
     this.root.classList.add("kq-root");
+    this.currentViews = [];
 
     if (!this._quiz || !this.attempt) {
       this.root.append(el("div", { class: "kq-empty" }, el("p", { text: "No quiz loaded." })));
@@ -306,7 +318,16 @@ export class QuizPlayer {
     const { question, index, position, total } = attempt.current();
     wrap.append(this.renderMeta(`Question ${position + 1} of ${total}`));
 
-    this.view = createQuestionView(quiz, question, index, this.optionsFor(question, index));
+    this.view = createQuestionView(
+      quiz,
+      question,
+      index,
+      this.optionsFor(question, index),
+      this.activeVariant(question),
+    );
+    this.currentViews = [{ index, view: this.view }];
+    const toggle = this.renderViewToggle(question);
+    if (toggle) this.view.element.prepend(toggle);
     wrap.append(this.view.element);
 
     const immediate = attempt.settings.feedback === "immediate";
@@ -316,6 +337,7 @@ export class QuizPlayer {
 
     if (immediate && alreadyChecked) {
       this.view.setDisabled(true);
+      this.view.markResults?.();
       this.view.element.append(this.renderFeedback(index));
     }
 
@@ -355,12 +377,21 @@ export class QuizPlayer {
 
     const views: { index: number; view: QuestionView }[] = [];
     for (const { question, index } of this.orderedQuestions()) {
-      const view = createQuestionView(quiz, question, index, this.optionsFor(question, index));
+      const view = createQuestionView(
+        quiz,
+        question,
+        index,
+        this.optionsFor(question, index),
+        this.activeVariant(question),
+      );
+      const toggle = this.renderViewToggle(question);
+      if (toggle) view.element.prepend(toggle);
       const stored = this.attempt!.getAnswers()[question.id ?? String(index)];
       if (stored !== undefined) view.setAnswer(stored);
       views.push({ index, view });
       wrap.append(view.element);
     }
+    this.currentViews = views;
 
     const footer = el("div", { class: "kq-footer" });
     footer.append(el("span", { class: "kq-progress" }));
@@ -558,6 +589,74 @@ export class QuizPlayer {
   /** Presentation-ordered options for a choice question (undefined for other types). */
   private optionsFor(question: Quiz["questions"][number], index: number) {
     return question.type === "choice" ? this.attempt!.optionsFor(question, index) : undefined;
+  }
+
+  /* --------------------------------------------------------- view variants */
+
+  /** Stable per-quiz key for remembering UI preferences. */
+  private quizKey(): string {
+    const meta = this._quiz!.metadata;
+    return meta.id ?? meta.title;
+  }
+
+  /** Whether the learner may switch the view of `type` (default: yes). */
+  private viewSwitchingAllowed(type: Question["type"]): boolean {
+    const editable = this.options.editableViews;
+    if (editable === undefined || editable === true) return true;
+    if (editable === false) return false;
+    return editable.includes(type);
+  }
+
+  /** The variant to render for `question`: saved learner choice → developer default
+   *  → built-in first variant. `undefined` for types with a single fixed view. */
+  private activeVariant(question: Quiz["questions"][number]): string | undefined {
+    const variants = variantsFor(question.type);
+    if (!variants.length) return undefined;
+    const known = (id: string | null | undefined) => variants.some((v) => v.id === id);
+    if (this.viewSwitchingAllowed(question.type)) {
+      const stored = storedViewPref(this.quizKey(), question.type);
+      if (known(stored)) return stored!;
+    }
+    const dev = this.options.views?.[question.type];
+    if (known(dev)) return dev!;
+    return variants[0]!.id;
+  }
+
+  /** A segmented toggle for the question's views, or `null` when not switchable. */
+  private renderViewToggle(question: Quiz["questions"][number]): HTMLElement | null {
+    const variants = variantsFor(question.type);
+    if (variants.length <= 1 || !this.viewSwitchingAllowed(question.type)) return null;
+    const active = this.activeVariant(question);
+    const toggle = el("div", { class: "kq-view-toggle", role: "group", "aria-label": "Choose view" });
+    for (const variant of variants) {
+      const isActive = variant.id === active;
+      toggle.append(
+        el("button", {
+          type: "button",
+          class: `kq-view-btn${isActive ? " kq-active" : ""}`,
+          "aria-pressed": isActive ? "true" : "false",
+          onclick: () => this.switchView(question.type, variant.id),
+        }, variant.label),
+      );
+    }
+    return toggle;
+  }
+
+  /** Switch a type's view: keep in-progress answers, remember the choice, re-render. */
+  private switchView(type: Question["type"], variantId: string): void {
+    if (storedViewPref(this.quizKey(), type) === variantId) return;
+    this.commitVisibleAnswers();
+    setViewPref(this.quizKey(), type, variantId);
+    this.render();
+  }
+
+  /** Store the answers of every mounted view without grading them (no feedback). */
+  private commitVisibleAnswers(): void {
+    if (!this.attempt) return;
+    for (const { index, view } of this.currentViews) {
+      const answer = view.getAnswer();
+      if (answer !== undefined) this.attempt.answerAt(index, answer);
+    }
   }
 
   private orderedQuestions(): { question: Quiz["questions"][number]; index: number }[] {
