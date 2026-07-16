@@ -5,6 +5,7 @@ import { slugFilename } from "../src/download";
 
 const STORAGE_KEY = "kensai-quiz-library";
 const FOLDERS_KEY = "kensai-quiz-library:folders";
+const ATTEMPTS_KEY = "kensai-quiz-library:attempts";
 
 /** A minimal, parseable quiz source (validation is disabled in these UI tests). */
 const quizYaml = (title: string): string =>
@@ -249,6 +250,76 @@ describe("downloads", () => {
     expect(blobs[0]!.type).toBe("application/zip");
     const bytes = await blobBytes(blobs[0]!);
     expect([bytes[0], bytes[1], bytes[2], bytes[3]]).toEqual([0x50, 0x4b, 0x03, 0x04]);
+  });
+});
+
+/* --------------------------------------------------------- results panel */
+
+describe("results", () => {
+  const seedQuiz = (id: string, title: string) => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify([{ id, title, count: 4, source: quizYaml(title), format: "yaml", savedAt: 1 }]),
+    );
+  };
+  const seedAttempts = (id: string, attempts: unknown[]) => {
+    localStorage.setItem(ATTEMPTS_KEY, JSON.stringify({ [id]: attempts }));
+  };
+  const cat = (categoryId: string | null, correct: number, total: number, label?: string) => ({
+    categoryId,
+    label,
+    correct,
+    total,
+    accuracy: total ? correct / total : 0,
+  });
+
+  it("renders quiz action buttons on their own row", () => {
+    const lib = mount();
+    lib.addQuiz(quizYaml("Layout"));
+    const row = host.querySelector(".kq-lib-actions-row");
+    expect(row).not.toBeNull();
+    expect(row!.querySelector('.kq-icon-btn[aria-label="View results"]')).not.toBeNull();
+  });
+
+  it("shows summary, weakest topic and a per-topic table from stored attempts", () => {
+    seedQuiz("quizA", "Verbs");
+    seedAttempts("quizA", [
+      { at: 1, ratio: 0.5, score: 2, maxScore: 4, passed: null, byCategory: [cat("g", 1, 2, "Grammar"), cat("v", 1, 2, "Vocab")] },
+      { at: 2, ratio: 1.0, score: 4, maxScore: 4, passed: null, byCategory: [cat("g", 1, 2, "Grammar"), cat("v", 2, 2, "Vocab")] },
+    ]);
+    mount();
+    // Sub-line reflects history.
+    expect(host.querySelector(".kq-lib-sub")!.textContent).toMatch(/avg 75% · 2 attempts/);
+
+    click('.kq-icon-btn[aria-label="View results"]');
+    const panel = host.querySelector(".kq-results-panel")!;
+    expect(panel.querySelector(".kq-results-summary")!.textContent).toMatch(/2 attempts/);
+    expect(panel.querySelector(".kq-results-summary")!.textContent).toMatch(/best 100%/);
+    // Grammar is weakest overall (2/4 vs Vocab 3/4).
+    expect(panel.querySelector(".kq-focus")!.textContent).toMatch(/Focus on:\s*Grammar/);
+
+    // Expand the most recent execution to see its per-topic table.
+    const rows = panel.querySelectorAll<HTMLButtonElement>(".kq-attempt-row");
+    expect(rows.length).toBe(2);
+    rows[0]!.click();
+    expect(host.querySelector(".kq-attempt-detail")).not.toBeNull();
+  });
+
+  it("shows an empty note when there is no history", () => {
+    const lib = mount();
+    lib.addQuiz(quizYaml("Fresh"));
+    click('.kq-icon-btn[aria-label="View results"]');
+    expect(host.querySelector(".kq-results-empty")).not.toBeNull();
+  });
+
+  it("clears a quiz's history when the quiz is deleted", () => {
+    vi.stubGlobal("confirm", () => true);
+    seedQuiz("quizA", "Doomed");
+    seedAttempts("quizA", [{ at: 1, ratio: 0.5, score: 2, maxScore: 4, passed: null, byCategory: [] }]);
+    mount();
+    click('.kq-icon-btn[aria-label="Delete"]');
+    const attempts = JSON.parse(localStorage.getItem(ATTEMPTS_KEY) ?? "{}");
+    expect(attempts.quizA).toBeUndefined();
   });
 });
 

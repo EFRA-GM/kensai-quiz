@@ -17,6 +17,7 @@ import { createQuestionView, variantsFor, type QuestionView } from "./views";
 import { correctAnswerText, userAnswerText } from "./answers";
 import { buildSettingsPanel, type EditableSettingKey } from "./settings-ui";
 import { setViewPref, storedViewPref } from "./view-prefs";
+import { hasTopics, weakestCategory } from "./results";
 
 export interface PlayerOptions {
   /** Quiz source: a YAML/JSON string or an already-parsed object. Optional — a
@@ -471,7 +472,7 @@ export class QuizPlayer {
 
     // Per-category table (only when there is more than the single uncategorized bucket).
     const cats = result.stats.byCategory;
-    if (cats.length > 1 || (cats[0] && cats[0].categoryId !== null)) {
+    if (hasTopics(cats)) {
       const table = el("table", { class: "kq-cat-table" });
       table.append(
         el("thead", {}, el("tr", {}, el("th", { text: "Category" }), el("th", { text: "Score" }))),
@@ -485,6 +486,18 @@ export class QuizPlayer {
       }
       table.append(tbody);
       wrap.append(table);
+
+      // Point the learner at the topic that needs the most work.
+      const weakest = weakestCategory(cats);
+      if (weakest) {
+        const name = weakest.label ?? weakest.categoryId ?? "Uncategorized";
+        wrap.append(
+          el("div", { class: "kq-focus" },
+            el("span", { class: "kq-focus-label", text: "Focus on: " }),
+            el("span", { text: `${name} (${Math.round(weakest.accuracy * 100)}%)` }),
+          ),
+        );
+      }
     }
 
     wrap.append(this.renderReview(result));

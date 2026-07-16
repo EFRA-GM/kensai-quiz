@@ -1,6 +1,6 @@
 {
   "name": "@kensai/quiz-player",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Embeddable, framework-free web player for the Kensai Quiz format. Use via npm (import) or a single CDN <script> — then KensaiQuiz.init('#el', { quiz }).",
   "type": "module",
   "license": "MIT",

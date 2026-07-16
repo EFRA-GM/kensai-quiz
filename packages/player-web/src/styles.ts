@@ -204,6 +204,26 @@ const CSS = `
 .kq-lib-item-actions { display: flex; align-items: center; gap: 0.4rem; flex: none; flex-wrap: wrap; justify-content: flex-end; }
 .kq-lib-bar { margin-bottom: 1rem; }
 .kq-lib-move { padding: 0.35rem 0.5rem; font-size: 0.82rem; max-width: 9rem; }
+/* quiz actions sit on their own row beneath the title (keeps long titles readable) */
+.kq-lib-actions-row { margin-top: 0.6rem; justify-content: flex-start; }
+
+/* per-quiz results panel */
+.kq-results-panel { margin-top: 0.75rem; padding: 0.85rem; border: 1px solid var(--kq-border); border-radius: var(--kq-radius); background: var(--kq-surface); display: flex; flex-direction: column; gap: 0.6rem; }
+.kq-results-empty { margin: 0; color: var(--kq-muted); font-size: 0.9rem; }
+.kq-results-summary { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; font-size: 0.9rem; font-weight: 600; }
+.kq-results-actions { display: flex; }
+.kq-attempt-list { display: flex; flex-direction: column; }
+.kq-attempt { border-top: 1px solid var(--kq-border); }
+.kq-attempt-row { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.5rem 0.1rem; border: 0; background: none; cursor: pointer; color: inherit; font: inherit; text-align: left; }
+.kq-attempt-row:hover { color: var(--kq-accent); }
+.kq-attempt-date { color: var(--kq-muted); font-size: 0.85rem; }
+.kq-attempt-score { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.kq-attempt-score .kq-badge { margin-top: 0; }
+.kq-attempt-detail { margin-top: 0; margin-bottom: 0.5rem; }
+
+/* "Focus on: <topic>" study cue, shown in results (player + library) */
+.kq-focus { padding: 0.5rem 0.75rem; border-radius: 10px; border-left: 4px solid var(--kq-accent); background: color-mix(in srgb, var(--kq-accent) 12%, transparent); font-size: 0.9rem; }
+.kq-focus-label { font-weight: 700; }
 
 /* breadcrumb (root ▸ folder) shown while inside a folder */
 .kq-crumbs { display: flex; align-items: center; gap: 0.4rem; min-width: 0; flex-wrap: wrap; }

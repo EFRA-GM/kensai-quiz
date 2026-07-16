@@ -74,6 +74,19 @@ reflected in `spec/` and `packages/core`.
   a **single `.zip`** built by a dependency-free STORE-method writer (`src/zip.ts`, CRC32 +
   zip records) via `src/download.ts` (`Blob` + `<a download>`). All of this is a player
   concern — spec/schema/core stay UI-agnostic and gain no dependency.
+- **Result statistics (UI-only)**: finishing an attempt records one execution locally. The
+  library passes `onFinish` (already on `PlayerOptions`) into the nested `QuizPlayer` and
+  stores a trimmed slice of the core `QuizResult` (overall `ratio`/`score`/`passed` +
+  per-category `byCategory`) under `` `${storageKey}:attempts` `` as
+  `Record<quizId, StoredAttempt[]>` (capped at `maxAttempts`, default 50; helpers in
+  `src/results.ts`). Each quiz item gets a **📊 View results** panel: attempts count,
+  avg/best/last %, a per-execution list (each expands to its per-topic table), and
+  **Clear history**; the sub-line shows `avg X% · N attempts`. The lowest-accuracy topic is
+  surfaced as a **"Focus on: …"** cue both in the player's end-of-attempt results screen
+  (`weakestCategory` in `src/results.ts`) and, aggregated across history, in the library
+  panel. Deleting a quiz clears its history. Per-quiz action buttons render on their **own
+  row beneath the title** (`.kq-lib-actions-row`) so long titles don't truncate on mobile;
+  folder rows keep their single-row layout. Player-only; spec/schema/core untouched.
 - Built with **tsup** into two shapes: npm (ESM/CJS + `.d.ts`, core kept external) and a
   self-contained CDN IIFE (`dist/kensai-quiz-player.global.js`, exposes `window.KensaiQuiz`,
   bundles everything). Build core first (`pnpm -r build` handles ordering).

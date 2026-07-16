@@ -8,6 +8,18 @@ import { applyTheme, themeButton } from "./theme";
 import { aiAuthoringGuide } from "./ai-guide.generated";
 import { downloadBlob, slugFilename } from "./download";
 import { zipSync } from "./zip";
+import type { QuizResult } from "@kensai/quiz-core";
+import {
+  aggregateByCategory,
+  attemptsFor,
+  clearAttempts,
+  hasTopics,
+  recordAttempt,
+  summarize,
+  toStoredAttempt,
+  weakestCategory,
+  type StoredAttempt,
+} from "./results";
 
 /** Human-viewable link to the authoring guide (for the info line, not for the model). */
 const AI_GUIDE_BLOB =
@@ -36,6 +48,8 @@ export interface LibraryOptions {
    *  at a time with immediate feedback (a good study default); the learner can change
    *  these per quiz via the ⚙️ gear. */
   defaultSettings?: Partial<ResolvedSettings>;
+  /** How many past executions to keep per quiz (older ones are dropped). Default `50`. */
+  maxAttempts?: number;
   /** Injectable clock/RNG — mainly for testing. */
   now?: () => number;
   rng?: () => number;
@@ -89,6 +103,12 @@ export class QuizLibrary {
   private player: QuizPlayer | null = null;
   private playingId: string | null = null;
   private settingsFor: string | null = null;
+  /** The quiz whose results panel is open, or `null`. */
+  private resultsFor: string | null = null;
+  /** Which execution row (by `at` timestamp) is expanded in the results panel. */
+  private expandedAttempt: number | null = null;
+  /** When the current play began, to record attempt duration. */
+  private playStartedAt: number | null = null;
   /** The folder currently being viewed; `null` means the root. */
   private currentFolderId: string | null = null;
   private pasteOpen = false;
@@ -226,8 +246,28 @@ export class QuizLibrary {
   private remove(id: string): void {
     this.quizzes = this.quizzes.filter((q) => q.id !== id);
     if (this.settingsFor === id) this.settingsFor = null;
+    if (this.resultsFor === id) this.resultsFor = null;
+    clearAttempts(this.storageKey, id); // don't leave orphaned history behind
     this.persist();
     this.render();
+  }
+
+  /** Current time, honoring an injected clock for tests. */
+  private now(): number {
+    return this.options.now?.() ?? Date.now();
+  }
+
+  /** Persist the finished attempt's result as one execution record. */
+  private onAttemptFinished(quizId: string, result: QuizResult): void {
+    const at = this.now();
+    const durationMs = this.playStartedAt != null ? at - this.playStartedAt : undefined;
+    recordAttempt(
+      this.storageKey,
+      quizId,
+      toStoredAttempt(result, at, durationMs),
+      this.options.maxAttempts ?? 50,
+    );
+    // The player is showing its own results screen; the list refreshes on return.
   }
 
   private moveQuiz(id: string, folderId: string | null): void {
@@ -309,6 +349,7 @@ export class QuizLibrary {
 
   private play(id: string): void {
     this.playingId = id;
+    this.playStartedAt = this.now();
     this.render();
   }
 
@@ -341,6 +382,7 @@ export class QuizLibrary {
     );
     const mount = el("div", { class: "kq-lib-player" });
     this.root.append(mount);
+    const quizId = quiz.id;
     this.player = new QuizPlayer(mount, {
       quiz: quiz.source,
       format: quiz.format,
@@ -352,6 +394,7 @@ export class QuizLibrary {
       fullscreen: this.options.fullscreen,
       now: this.options.now,
       rng: this.options.rng,
+      onFinish: (result) => this.onAttemptFinished(quizId, result),
     });
     // The library owns the theme control in list view; the nested player keeps its own
     // in its header while playing (both share the same stored preference).
@@ -689,45 +732,58 @@ export class QuizLibrary {
   }
 
   private renderItem(quiz: StoredQuiz): HTMLElement {
+    // Title/count on top, actions on their own row below — so a long title never
+    // gets crowded or truncated behind the buttons (matters most on mobile).
     const item = el("div", { class: "kq-lib-item" });
     item.append(
-      el("div", { class: "kq-lib-item-row" },
-        el("div", { class: "kq-lib-info" },
-          el("div", { class: "kq-lib-title", text: quiz.title }),
-          el("div", { class: "kq-lib-sub", text: `${quiz.count} question${quiz.count === 1 ? "" : "s"}` }),
-        ),
-        el("div", { class: "kq-lib-item-actions" },
-          el("button", { type: "button", class: "kq-btn kq-btn-primary", onclick: () => this.play(quiz.id) }, "▶ Play"),
-          this.renderMoveSelect(quiz),
-          el("button", {
-            type: "button",
-            class: "kq-icon-btn",
-            title: "Download quiz",
-            "aria-label": "Download quiz",
-            onclick: () => this.downloadQuiz(quiz),
-          }, "⬇"),
-          el("button", {
-            type: "button",
-            class: "kq-icon-btn",
-            title: "Settings",
-            "aria-label": "Settings",
-            onclick: () => {
-              this.settingsFor = this.settingsFor === quiz.id ? null : quiz.id;
-              this.render();
-            },
-          }, "⚙"),
-          el("button", {
-            type: "button",
-            class: "kq-icon-btn",
-            title: "Delete",
-            "aria-label": "Delete",
-            onclick: () => {
-              if (confirmDelete(quiz.title)) this.remove(quiz.id);
-            },
-          }, "🗑"),
-        ),
+      el("div", { class: "kq-lib-info" },
+        el("div", { class: "kq-lib-title", text: quiz.title }),
+        el("div", { class: "kq-lib-sub", text: this.subLine(quiz) }),
+      ),
+      el("div", { class: "kq-lib-item-actions kq-lib-actions-row" },
+        el("button", { type: "button", class: "kq-btn kq-btn-primary", onclick: () => this.play(quiz.id) }, "▶ Play"),
+        this.renderMoveSelect(quiz),
+        el("button", {
+          type: "button",
+          class: "kq-icon-btn",
+          title: "View results",
+          "aria-label": "View results",
+          onclick: () => {
+            this.resultsFor = this.resultsFor === quiz.id ? null : quiz.id;
+            this.expandedAttempt = null;
+            this.render();
+          },
+        }, "📊"),
+        el("button", {
+          type: "button",
+          class: "kq-icon-btn",
+          title: "Download quiz",
+          "aria-label": "Download quiz",
+          onclick: () => this.downloadQuiz(quiz),
+        }, "⬇"),
+        el("button", {
+          type: "button",
+          class: "kq-icon-btn",
+          title: "Settings",
+          "aria-label": "Settings",
+          onclick: () => {
+            this.settingsFor = this.settingsFor === quiz.id ? null : quiz.id;
+            this.render();
+          },
+        }, "⚙"),
+        el("button", {
+          type: "button",
+          class: "kq-icon-btn",
+          title: "Delete",
+          "aria-label": "Delete",
+          onclick: () => {
+            if (confirmDelete(quiz.title)) this.remove(quiz.id);
+          },
+        }, "🗑"),
       ),
     );
+
+    if (this.resultsFor === quiz.id) item.append(this.renderResultsPanel(quiz));
 
     if (this.settingsFor === quiz.id) {
       item.append(
@@ -748,6 +804,123 @@ export class QuizLibrary {
       );
     }
     return item;
+  }
+
+  /** Sub-title line: question count, plus a play summary once there is history. */
+  private subLine(quiz: StoredQuiz): string {
+    const questions = `${quiz.count} question${quiz.count === 1 ? "" : "s"}`;
+    const summary = summarize(attemptsFor(this.storageKey, quiz.id));
+    if (!summary.count) return questions;
+    const plays = `${summary.count} attempt${summary.count === 1 ? "" : "s"}`;
+    return `${questions} · avg ${summary.averagePct}% · ${plays}`;
+  }
+
+  /** The per-quiz results panel: summary, weakest topic, and each execution. */
+  private renderResultsPanel(quiz: StoredQuiz): HTMLElement {
+    const panel = el("div", { class: "kq-results-panel" });
+    const attempts = attemptsFor(this.storageKey, quiz.id);
+
+    if (!attempts.length) {
+      panel.append(
+        el("p", { class: "kq-results-empty", text: "No attempts yet. Play the quiz to record your results." }),
+      );
+      return panel;
+    }
+
+    const summary = summarize(attempts);
+    panel.append(
+      el("div", { class: "kq-results-summary" },
+        el("span", { text: `${summary.count} attempt${summary.count === 1 ? "" : "s"}` }),
+        el("span", { text: `avg ${summary.averagePct}%` }),
+        el("span", { text: `best ${summary.bestPct}%` }),
+        el("span", { text: `last ${summary.lastPct}%` }),
+      ),
+    );
+
+    // Weakest topic across the learner's whole history for this quiz.
+    const aggregate = aggregateByCategory(attempts);
+    if (hasTopics(aggregate)) {
+      const weakest = weakestCategory(aggregate);
+      if (weakest) {
+        const name = weakest.label ?? weakest.categoryId ?? "Uncategorized";
+        panel.append(
+          el("div", { class: "kq-focus" },
+            el("span", { class: "kq-focus-label", text: "Focus on: " }),
+            el("span", { text: `${name} (${Math.round(weakest.accuracy * 100)}%)` }),
+          ),
+        );
+      }
+    }
+
+    // Executions, newest first; a row expands to its per-topic breakdown.
+    const list = el("div", { class: "kq-attempt-list" });
+    for (const attempt of [...attempts].reverse()) {
+      list.append(this.renderAttemptRow(attempt));
+    }
+    panel.append(list);
+
+    panel.append(
+      el("div", { class: "kq-results-actions" },
+        el("button", {
+          type: "button",
+          class: "kq-btn",
+          onclick: () => {
+            if (confirmClearHistory(quiz.title)) {
+              clearAttempts(this.storageKey, quiz.id);
+              this.expandedAttempt = null;
+              this.render();
+            }
+          },
+        }, "Clear history"),
+      ),
+    );
+    return panel;
+  }
+
+  private renderAttemptRow(attempt: StoredAttempt): HTMLElement {
+    const pct = Math.round(attempt.ratio * 100);
+    const expanded = this.expandedAttempt === attempt.at;
+    const wrap = el("div", { class: "kq-attempt" });
+
+    wrap.append(
+      el("button", {
+        type: "button",
+        class: "kq-attempt-row",
+        "aria-expanded": expanded ? "true" : "false",
+        onclick: () => {
+          this.expandedAttempt = expanded ? null : attempt.at;
+          this.render();
+        },
+      },
+        el("span", { class: "kq-attempt-date", text: formatDate(attempt.at) }),
+        el("span", { class: "kq-attempt-score" },
+          attempt.passed !== null
+            ? el("span", { class: `kq-badge ${attempt.passed ? "kq-pass" : "kq-fail"}`, text: attempt.passed ? "Passed" : "Not passed" })
+            : null,
+          el("span", { text: `${pct}%` }),
+        ),
+      ),
+    );
+
+    if (expanded && hasTopics(attempt.byCategory)) {
+      const table = el("table", { class: "kq-cat-table kq-attempt-detail" });
+      table.append(
+        el("thead", {}, el("tr", {}, el("th", { text: "Topic" }), el("th", { text: "Score" }))),
+      );
+      const tbody = el("tbody");
+      for (const c of attempt.byCategory) {
+        const name = c.label ?? c.categoryId ?? "Uncategorized";
+        tbody.append(
+          el("tr", {},
+            el("td", { text: name }),
+            el("td", { text: `${c.correct}/${c.total} (${Math.round(c.accuracy * 100)}%)` }),
+          ),
+        );
+      }
+      table.append(tbody);
+      wrap.append(table);
+    }
+    return wrap;
   }
 
   /** A `Move to…` dropdown listing the root plus every folder. */
@@ -790,6 +963,15 @@ function readFileText(file: File): Promise<{ source: string; format: "yaml" | "j
     reader.onerror = () => reject(reader.error ?? new Error("read failed"));
     reader.readAsText(file);
   });
+}
+
+/** Human-friendly date+time for an execution row (locale-aware, best-effort). */
+function formatDate(at: number): string {
+  try {
+    return new Date(at).toLocaleString();
+  } catch {
+    return new Date(at).toISOString();
+  }
 }
 
 /**
@@ -852,4 +1034,11 @@ function confirmDeleteFolder(name: string, count: number): boolean {
     ? ` Its ${count} quiz${count === 1 ? "" : "zes"} will be moved back out of the folder, not deleted.`
     : "";
   return confirm(`Delete folder “${name}”?${note}`);
+}
+
+function confirmClearHistory(title: string): boolean {
+  if (typeof confirm === "function") {
+    return confirm(`Clear all saved results for “${title}”? This can't be undone.`);
+  }
+  return true;
 }

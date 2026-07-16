@@ -21,7 +21,7 @@ import { resolveTarget } from "./dom";
 import { QuizPlayer, type PlayerOptions } from "./player";
 import { QuizLibrary, type LibraryOptions } from "./library";
 
-export const version = "0.3.0";
+export const version = "0.4.0";
 
 /**
  * Mount a quiz player into `target` (an element, a CSS selector, or a bare id).
