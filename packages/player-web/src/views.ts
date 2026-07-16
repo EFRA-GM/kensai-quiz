@@ -26,6 +26,10 @@ export const VIEW_VARIANTS: Partial<Record<Question["type"], ViewVariantDef[]>> 
     { id: "dropdown", label: "Dropdown" },
     { id: "buckets", label: "Word bank" },
   ],
+  ordering: [
+    { id: "word_bank", label: "Word bank" },
+    { id: "arrows", label: "Arrows" },
+  ],
 };
 
 /** Available variants for a type (empty when it has a single fixed view). */
@@ -108,7 +112,9 @@ function buildBody(
     case "matching":
       return matchingView(question, body);
     case "ordering":
-      return orderingView(question, body);
+      return variant === "arrows"
+        ? orderingView(question, body)
+        : orderingWordBankView(question, body);
     default:
       return { getAnswer: () => undefined, setAnswer: () => {}, setDisabled: () => {} };
   }
@@ -609,6 +615,89 @@ function orderingView(
     markResults() {
       revealed = true;
       renderList();
+    },
+  };
+}
+
+/**
+ * Duolingo-style "word bank" ordering: unplaced words sit in a bank; tapping one
+ * moves it into the answer line (in tap order); tapping a placed word returns it.
+ * Same `string[]` answer shape as `orderingView`, so core scoring is untouched.
+ */
+function orderingWordBankView(
+  question: Extract<Question, { type: "ordering" }>,
+  body: HTMLElement,
+): ViewParts {
+  const labels = new Map(question.items.map((i) => [i.id, i.text]));
+  const bankOrder = question.items.map((i) => i.id);
+  let placed: string[] = [];
+  let disabled = false;
+  let revealed = false;
+
+  const wrap = el("div", { class: "kq-wordbank" });
+  body.append(wrap);
+
+  const chip = (id: string, inAnswer: boolean, position: number): HTMLElement => {
+    const result =
+      revealed && inAnswer
+        ? id === question.answer[position]
+          ? " kq-correct"
+          : " kq-incorrect"
+        : "";
+    const label = labels.get(id) ?? id;
+    return el("button", {
+      type: "button",
+      class: `kq-chip${result}`,
+      "aria-label": inAnswer ? `Remove ${label}` : `Place ${label}`,
+      disabled,
+      onclick: () => {
+        if (disabled) return;
+        if (inAnswer) placed = placed.filter((x) => x !== id);
+        else placed = [...placed, id];
+        renderBoard();
+      },
+    }, mdEl("span", label));
+  };
+
+  function renderBoard(): void {
+    clear(wrap);
+    const answer = el("div", { class: "kq-wb-answer", "aria-label": "Your answer" });
+    placed.forEach((id, position) => answer.append(chip(id, true, position)));
+    if (!placed.length) answer.append(el("span", { class: "kq-zone-empty", text: "—" }));
+
+    const bank = el("div", { class: "kq-wb-bank", "aria-label": "Word bank" });
+    const remaining = bankOrder.filter((id) => !placed.includes(id));
+    for (const id of remaining) bank.append(chip(id, false, -1));
+    if (!remaining.length) bank.append(el("span", { class: "kq-zone-empty", text: "—" }));
+
+    wrap.append(answer, bank);
+  }
+
+  renderBoard();
+
+  return {
+    getAnswer() {
+      return placed.length ? placed.slice() : undefined;
+    },
+    setAnswer(answer) {
+      if (Array.isArray(answer)) {
+        const known = new Set(labels.keys());
+        const seen = new Set<string>();
+        placed = answer.filter((id): id is string => {
+          if (typeof id !== "string" || !known.has(id) || seen.has(id)) return false;
+          seen.add(id);
+          return true;
+        });
+        renderBoard();
+      }
+    },
+    setDisabled(value) {
+      disabled = value;
+      renderBoard();
+    },
+    markResults() {
+      revealed = true;
+      renderBoard();
     },
   };
 }

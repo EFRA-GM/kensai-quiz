@@ -62,6 +62,31 @@ reflected in `spec/` and `packages/core`.
   ⛶ fullscreen toggle and a ☀/🌙 light-dark theme toggle (`src/theme.ts`, remembered in
   `localStorage`; applied as a `.kq-theme-{light,dark}` class that cascades into nested
   `.kq-root`). In the library these controls sit in the header from the start.
+- **Library organization (UI-only)**: the playground supports **one-level folders**
+  (file-explorer navigation with a `root ▸ folder` breadcrumb). A `StoredQuiz` carries an
+  optional `folderId` (absent/`null` = loose at root); folders are a separate
+  `StoredFolder[]` persisted under `` `${storageKey}:folders` `` — existing flat arrays load
+  unchanged (no migration). Upload/paste/AI save into the folder currently being viewed;
+  quizzes move between folders via a per-item `Move to…` select; deleting a folder re-homes
+  its quizzes to root rather than deleting them. **Upload accepts multiple files at once**
+  (`saveMany` batches parse + one render). **Downloads** re-serve the stored raw `source`
+  (no serializer): a single quiz downloads as its `.yaml`/`.json`, and a folder downloads as
+  a **single `.zip`** built by a dependency-free STORE-method writer (`src/zip.ts`, CRC32 +
+  zip records) via `src/download.ts` (`Blob` + `<a download>`). All of this is a player
+  concern — spec/schema/core stay UI-agnostic and gain no dependency.
+- **Result statistics (UI-only)**: finishing an attempt records one execution locally. The
+  library passes `onFinish` (already on `PlayerOptions`) into the nested `QuizPlayer` and
+  stores a trimmed slice of the core `QuizResult` (overall `ratio`/`score`/`passed` +
+  per-category `byCategory`) under `` `${storageKey}:attempts` `` as
+  `Record<quizId, StoredAttempt[]>` (capped at `maxAttempts`, default 50; helpers in
+  `src/results.ts`). Each quiz item gets a **📊 View results** panel: attempts count,
+  avg/best/last %, a per-execution list (each expands to its per-topic table), and
+  **Clear history**; the sub-line shows `avg X% · N attempts`. The lowest-accuracy topic is
+  surfaced as a **"Focus on: …"** cue both in the player's end-of-attempt results screen
+  (`weakestCategory` in `src/results.ts`) and, aggregated across history, in the library
+  panel. Deleting a quiz clears its history. Per-quiz action buttons render on their **own
+  row beneath the title** (`.kq-lib-actions-row`) so long titles don't truncate on mobile;
+  folder rows keep their single-row layout. Player-only; spec/schema/core untouched.
 - Built with **tsup** into two shapes: npm (ESM/CJS + `.d.ts`, core kept external) and a
   self-contained CDN IIFE (`dist/kensai-quiz-player.global.js`, exposes `window.KensaiQuiz`,
   bundles everything). Build core first (`pnpm -r build` handles ordering).
@@ -72,7 +97,8 @@ reflected in `spec/` and `packages/core`.
   HTML first — keep that invariant when touching rendering.
 - **View variants**: a question type may offer more than one presentation, declared in
   `VIEW_VARIANTS` (`src/views.ts`; e.g. `classify` = `dropdown` | `buckets`, the tap-to-place
-  "word bank"). A variant is just another builder that keeps the same
+  "word bank"; `ordering` = `word_bank` (default) | `arrows`, a Duolingo-style tap-to-place
+  answer line vs. the ▲/▼ reorder list). A variant is just another builder that keeps the same
   `getAnswer`/`setAnswer`/`setDisabled` contract, so core scoring is untouched. The player
   resolves the active variant as: learner's saved per-quiz choice → developer default
   (`PlayerOptions.views`) → first variant. Learner switching is on by default and can be

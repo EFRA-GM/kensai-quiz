@@ -25,6 +25,7 @@ const CSS = `
   --kq-radius: 12px;
 
   box-sizing: border-box;
+  container-type: inline-size;
   color: var(--kq-fg);
   background: var(--kq-bg);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -95,13 +96,25 @@ const CSS = `
 .kq-blank-key { color: var(--kq-muted); font-weight: 600; }
 
 .kq-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.5rem 0.7rem; border: 1px solid var(--kq-border); border-radius: 10px; }
-.kq-row-label { flex: 1; }
+.kq-row-label { flex: 1; min-width: 0; }
+.kq-row .kq-select { flex: none; max-width: 60%; }
+/* narrow players (mobile, or a slim embed): stack the label above its select so long
+   clause text isn't crushed into a sliver next to the dropdown */
+@container (max-width: 460px) {
+  .kq-row { flex-direction: column; align-items: stretch; gap: 0.4rem; }
+  .kq-row .kq-select { max-width: none; width: 100%; }
+}
 
 .kq-ordering { list-style: decimal inside; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
 .kq-ordering-item { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.5rem 0.7rem; border: 1px solid var(--kq-border); border-radius: 10px; }
 .kq-move-group { display: inline-flex; gap: 0.25rem; }
 .kq-move { border: 1px solid var(--kq-border); background: var(--kq-bg); border-radius: 8px; width: 2rem; height: 2rem; cursor: pointer; font-size: 0.8rem; }
 .kq-move:disabled { opacity: 0.35; cursor: default; }
+
+/* ordering "word bank" variant: tap chips from the bank into the answer line, tap to remove */
+.kq-wordbank { display: flex; flex-direction: column; gap: 0.75rem; }
+.kq-wb-answer { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; min-height: 2.6rem; padding: 0.5rem; border-bottom: 2px solid var(--kq-border); }
+.kq-wb-bank { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; min-height: 2.6rem; padding: 0.5rem; border: 1px dashed var(--kq-border); border-radius: 10px; }
 
 /* view toggle: switch a question type's presentation (e.g. classify dropdown ⇄ word bank) */
 .kq-view-toggle { display: inline-flex; margin-bottom: 0.75rem; border: 1px solid var(--kq-border); border-radius: 10px; overflow: hidden; }
@@ -201,8 +214,42 @@ const CSS = `
 .kq-lib-info { min-width: 0; }
 .kq-lib-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kq-lib-sub { color: var(--kq-muted); font-size: 0.82rem; margin-top: 0.1rem; }
-.kq-lib-item-actions { display: flex; align-items: center; gap: 0.4rem; flex: none; }
-.kq-lib-bar { margin-bottom: 1rem; }
+.kq-lib-item-actions { display: flex; align-items: center; gap: 0.4rem; flex: none; flex-wrap: wrap; justify-content: flex-end; }
+.kq-lib-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 1rem; }
+.kq-lib-move { padding: 0.35rem 0.5rem; font-size: 0.82rem; max-width: 9rem; }
+/* quiz actions sit on their own row beneath the title (keeps long titles readable) */
+.kq-lib-actions-row { margin-top: 0.6rem; justify-content: flex-start; }
+
+/* per-quiz results panel */
+.kq-results-panel { margin-top: 0.75rem; padding: 0.85rem; border: 1px solid var(--kq-border); border-radius: var(--kq-radius); background: var(--kq-surface); display: flex; flex-direction: column; gap: 0.6rem; }
+.kq-results-empty { margin: 0; color: var(--kq-muted); font-size: 0.9rem; }
+.kq-results-summary { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; font-size: 0.9rem; font-weight: 600; }
+.kq-results-actions { display: flex; }
+.kq-attempt-list { display: flex; flex-direction: column; }
+.kq-attempt { border-top: 1px solid var(--kq-border); }
+.kq-attempt-row { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.5rem 0.1rem; border: 0; background: none; cursor: pointer; color: inherit; font: inherit; text-align: left; }
+.kq-attempt-row:hover { color: var(--kq-accent); }
+.kq-attempt-date { color: var(--kq-muted); font-size: 0.85rem; }
+.kq-attempt-score { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.kq-attempt-score .kq-badge { margin-top: 0; }
+.kq-attempt-detail { margin-top: 0; margin-bottom: 0.5rem; }
+
+/* "Focus on: <topic>" study cue, shown in results (player + library) */
+.kq-focus { padding: 0.5rem 0.75rem; border-radius: 10px; border-left: 4px solid var(--kq-accent); background: color-mix(in srgb, var(--kq-accent) 12%, transparent); font-size: 0.9rem; }
+.kq-focus-label { font-weight: 700; }
+
+/* breadcrumb (root ▸ folder) shown while inside a folder */
+.kq-crumbs { display: flex; align-items: center; gap: 0.4rem; min-width: 0; flex-wrap: wrap; }
+.kq-crumb-link { border: 0; background: none; padding: 0; cursor: pointer; color: var(--kq-accent); font: inherit; font-weight: 600; }
+.kq-crumb-link:hover { text-decoration: underline; }
+.kq-crumb-sep { color: var(--kq-muted); }
+.kq-crumb-current { margin: 0; }
+
+/* folder rows: a clickable open target plus row actions */
+.kq-folder-item .kq-lib-item-row { gap: 0.5rem; }
+.kq-folder-open { display: flex; align-items: center; gap: 0.6rem; flex: 1 1 auto; min-width: 0; border: 0; background: none; padding: 0; cursor: pointer; color: inherit; font: inherit; text-align: left; }
+.kq-folder-open:hover .kq-lib-title { color: var(--kq-accent); }
+.kq-folder-icon { font-size: 1.2rem; flex: none; }
 
 /* Theme: OS preference by default; an explicit .kq-theme-* class (set by the
    toggle) wins and cascades into any nested .kq-root (player inside the library). */

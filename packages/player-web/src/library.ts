@@ -6,6 +6,20 @@ import { buildSettingsPanel, type EditableSettingKey } from "./settings-ui";
 import { readJSON, writeJSON } from "./storage";
 import { applyTheme, themeButton } from "./theme";
 import { aiAuthoringGuide } from "./ai-guide.generated";
+import { downloadBlob, slugFilename } from "./download";
+import { zipSync } from "./zip";
+import type { QuizResult } from "@kensai/quiz-core";
+import {
+  aggregateByCategory,
+  attemptsFor,
+  clearAttempts,
+  hasTopics,
+  recordAttempt,
+  summarize,
+  toStoredAttempt,
+  weakestCategory,
+  type StoredAttempt,
+} from "./results";
 
 /** Human-viewable link to the authoring guide (for the info line, not for the model). */
 const AI_GUIDE_BLOB =
@@ -34,6 +48,8 @@ export interface LibraryOptions {
    *  at a time with immediate feedback (a good study default); the learner can change
    *  these per quiz via the ⚙️ gear. */
   defaultSettings?: Partial<ResolvedSettings>;
+  /** How many past executions to keep per quiz (older ones are dropped). Default `50`. */
+  maxAttempts?: number;
   /** Injectable clock/RNG — mainly for testing. */
   now?: () => number;
   rng?: () => number;
@@ -48,6 +64,15 @@ interface StoredQuiz {
   format: "yaml" | "json";
   savedAt: number;
   settings?: Partial<ResolvedSettings>;
+  /** Folder this quiz lives in; absent/`null` means loose at the root. */
+  folderId?: string | null;
+}
+
+/** A folder that groups quizzes (one level deep — folders never nest). */
+interface StoredFolder {
+  id: string;
+  name: string;
+  createdAt: number;
 }
 
 const DEFAULT_EDITABLE: EditableSettingKey[] = [
@@ -57,10 +82,13 @@ const DEFAULT_EDITABLE: EditableSettingKey[] = [
   "time_limit",
 ];
 
-/** Study-friendly defaults for quizzes added through the playground. */
+/** Study-friendly defaults for quizzes added through the playground. Shuffle is on
+ *  (question order + answer options) so repeated attempts aren't memorized by position. */
 const DEFAULT_LIBRARY_SETTINGS: Partial<ResolvedSettings> = {
   navigation: "sequential",
   feedback: "immediate",
+  order: "random",
+  shuffle_options: true,
 };
 
 /**
@@ -72,12 +100,23 @@ export class QuizLibrary {
   private readonly root: HTMLElement;
   private readonly options: LibraryOptions;
   private readonly storageKey: string;
+  private readonly foldersKey: string;
   private quizzes: StoredQuiz[];
+  private folders: StoredFolder[];
   private player: QuizPlayer | null = null;
   private playingId: string | null = null;
   private settingsFor: string | null = null;
+  /** The quiz whose results panel is open, or `null`. */
+  private resultsFor: string | null = null;
+  /** Which execution row (by `at` timestamp) is expanded in the results panel. */
+  private expandedAttempt: number | null = null;
+  /** When the current play began, to record attempt duration. */
+  private playStartedAt: number | null = null;
+  /** The folder currently being viewed; `null` means the root. */
+  private currentFolderId: string | null = null;
   private pasteOpen = false;
   private promptOpen = false;
+  private newFolderOpen = false;
   private error: string | null = null;
 
   constructor(target: HTMLElement, options: LibraryOptions = {}) {
@@ -85,7 +124,9 @@ export class QuizLibrary {
     this.root = target;
     this.options = options;
     this.storageKey = options.storageKey ?? "kensai-quiz-library";
+    this.foldersKey = `${this.storageKey}:folders`;
     this.quizzes = readJSON<StoredQuiz[]>(this.storageKey, []);
+    this.folders = readJSON<StoredFolder[]>(this.foldersKey, []);
     applyTheme(this.root);
     this.installFullscreen();
     this.render();
@@ -131,20 +172,38 @@ export class QuizLibrary {
     writeJSON(this.storageKey, this.quizzes);
   }
 
-  private save(rawSource: string, format: "yaml" | "json"): void {
+  private persistFolders(): void {
+    writeJSON(this.foldersKey, this.folders);
+  }
+
+  /** Quizzes belonging to `folderId` (`null` = loose at the root). */
+  private quizzesIn(folderId: string | null): StoredQuiz[] {
+    return this.quizzes.filter((q) => (q.folderId ?? null) === folderId);
+  }
+
+  /**
+   * Parse `rawSource` and build a `StoredQuiz` placed in the folder currently
+   * being viewed. Throws (via `loadQuiz`) on invalid input — callers handle it.
+   */
+  private buildStored(rawSource: string, format: "yaml" | "json"): StoredQuiz {
     // The AI prompt asks for the quiz inside a ```yaml block; tolerate a pasted fence.
     const source = stripCodeFence(rawSource);
+    const quiz = loadQuiz(source, { format, validate: this.options.validate });
+    return {
+      id: makeId(),
+      title: quiz.metadata.title,
+      count: quiz.questions.length,
+      source,
+      format,
+      savedAt: Date.now(),
+      folderId: this.currentFolderId,
+      settings: { ...(this.options.defaultSettings ?? DEFAULT_LIBRARY_SETTINGS) },
+    };
+  }
+
+  private save(rawSource: string, format: "yaml" | "json"): void {
     try {
-      const quiz = loadQuiz(source, { format, validate: this.options.validate });
-      const stored: StoredQuiz = {
-        id: makeId(),
-        title: quiz.metadata.title,
-        count: quiz.questions.length,
-        source,
-        format,
-        savedAt: Date.now(),
-        settings: { ...(this.options.defaultSettings ?? DEFAULT_LIBRARY_SETTINGS) },
-      };
+      const stored = this.buildStored(rawSource, format);
       this.quizzes = [stored, ...this.quizzes];
       this.persist();
       this.error = null;
@@ -155,15 +214,145 @@ export class QuizLibrary {
     this.render();
   }
 
+  /**
+   * Save several sources in one batch (e.g. a multi-file upload): parse each,
+   * prepend the successes together, and summarize any failures — all with a
+   * single persist + render.
+   */
+  private saveMany(entries: { source: string; format: "yaml" | "json" }[]): void {
+    const added: StoredQuiz[] = [];
+    let failed = 0;
+    let firstError: string | null = null;
+    for (const { source, format } of entries) {
+      try {
+        added.push(this.buildStored(source, format));
+      } catch (err) {
+        failed += 1;
+        if (!firstError) firstError = describeError(err);
+      }
+    }
+    if (added.length) {
+      // Keep upload order (first file ends up on top), newest batch before older quizzes.
+      this.quizzes = [...added, ...this.quizzes];
+      this.persist();
+    }
+    if (failed) {
+      this.error = added.length
+        ? `${added.length} added, ${failed} failed: ${firstError}`
+        : firstError;
+    } else {
+      this.error = null;
+    }
+    this.render();
+  }
+
   private remove(id: string): void {
     this.quizzes = this.quizzes.filter((q) => q.id !== id);
     if (this.settingsFor === id) this.settingsFor = null;
+    if (this.resultsFor === id) this.resultsFor = null;
+    clearAttempts(this.storageKey, id); // don't leave orphaned history behind
     this.persist();
     this.render();
   }
 
+  /** Current time, honoring an injected clock for tests. */
+  private now(): number {
+    return this.options.now?.() ?? Date.now();
+  }
+
+  /** Persist the finished attempt's result as one execution record. */
+  private onAttemptFinished(quizId: string, result: QuizResult): void {
+    const at = this.now();
+    const durationMs = this.playStartedAt != null ? at - this.playStartedAt : undefined;
+    recordAttempt(
+      this.storageKey,
+      quizId,
+      toStoredAttempt(result, at, durationMs),
+      this.options.maxAttempts ?? 50,
+    );
+    // The player is showing its own results screen; the list refreshes on return.
+  }
+
+  private moveQuiz(id: string, folderId: string | null): void {
+    const quiz = this.quizzes.find((q) => q.id === id);
+    if (!quiz) return;
+    quiz.folderId = folderId;
+    this.persist();
+    this.render();
+  }
+
+  /* --------------------------------------------------------------- folders */
+
+  private addFolder(name: string): void {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    this.folders = [...this.folders, { id: makeId(), name: trimmed, createdAt: Date.now() }];
+    this.persistFolders();
+    this.newFolderOpen = false;
+    this.error = null;
+    this.render();
+  }
+
+  private renameFolder(id: string): void {
+    const folder = this.folders.find((f) => f.id === id);
+    if (!folder || typeof prompt !== "function") return;
+    const name = prompt("Rename folder", folder.name);
+    const trimmed = name?.trim();
+    if (!trimmed) return;
+    folder.name = trimmed;
+    this.persistFolders();
+    this.render();
+  }
+
+  /** Delete a folder; its quizzes are moved back to the root, not deleted. */
+  private deleteFolder(id: string): void {
+    for (const quiz of this.quizzes) {
+      if (quiz.folderId === id) quiz.folderId = null;
+    }
+    this.folders = this.folders.filter((f) => f.id !== id);
+    if (this.currentFolderId === id) this.currentFolderId = null;
+    this.persist();
+    this.persistFolders();
+    this.render();
+  }
+
+  private openFolder(id: string | null): void {
+    this.currentFolderId = id;
+    this.settingsFor = null;
+    this.pasteOpen = false;
+    this.promptOpen = false;
+    this.newFolderOpen = false;
+    this.error = null;
+    this.render();
+  }
+
+  /* -------------------------------------------------------------- download */
+
+  private downloadQuiz(quiz: StoredQuiz): void {
+    const ext = quiz.format === "json" ? "json" : "yaml";
+    const mime = quiz.format === "json" ? "application/json" : "text/yaml";
+    downloadBlob(`${slugFilename(quiz.title)}.${ext}`, quiz.source, mime);
+  }
+
+  private downloadFolderZip(folder: StoredFolder): void {
+    const quizzes = this.quizzesIn(folder.id);
+    if (!quizzes.length) return;
+    const encoder = new TextEncoder();
+    const used = new Set<string>();
+    const files = quizzes.map((quiz) => {
+      const ext = quiz.format === "json" ? "json" : "yaml";
+      let stem = slugFilename(quiz.title);
+      let name = `${stem}.${ext}`;
+      for (let n = 1; used.has(name); n++) name = `${stem}-${n}.${ext}`;
+      used.add(name);
+      return { name, data: encoder.encode(quiz.source) };
+    });
+    downloadBlob(`${slugFilename(folder.name, "folder")}.zip`, zipSync(files), "application/zip");
+  }
+
   private play(id: string): void {
     this.playingId = id;
+    this.playStartedAt = this.now();
     this.render();
   }
 
@@ -189,13 +378,26 @@ export class QuizLibrary {
       this.backToList();
       return;
     }
-    this.root.append(
-      el("div", { class: "kq-lib-bar" },
-        el("button", { type: "button", class: "kq-btn", onclick: () => this.backToList() }, "← Library"),
-      ),
+    const bar = el("div", { class: "kq-lib-bar" },
+      el("button", { type: "button", class: "kq-btn", onclick: () => this.backToList() }, "← Library"),
     );
+    // The ⛶ toggle lives here (not in the nested player) so it fullscreens the whole
+    // library root — keeping the "← Library" button reachable while in fullscreen.
+    if (this.options.fullscreen !== false && fullscreenSupported()) {
+      bar.append(
+        el("button", {
+          type: "button",
+          class: "kq-icon-btn",
+          title: "Toggle fullscreen",
+          "aria-label": "Toggle fullscreen",
+          onclick: () => this.toggleFullscreen(),
+        }, "⛶"),
+      );
+    }
+    this.root.append(bar);
     const mount = el("div", { class: "kq-lib-player" });
     this.root.append(mount);
+    const quizId = quiz.id;
     this.player = new QuizPlayer(mount, {
       quiz: quiz.source,
       format: quiz.format,
@@ -204,9 +406,11 @@ export class QuizLibrary {
       editableSettings: this.editableKeys(),
       views: this.options.views,
       editableViews: this.options.editableViews,
-      fullscreen: this.options.fullscreen,
+      // Fullscreen is owned by the library bar above (so the back button stays visible).
+      fullscreen: false,
       now: this.options.now,
       rng: this.options.rng,
+      onFinish: (result) => this.onAttemptFinished(quizId, result),
     });
     // The library owns the theme control in list view; the nested player keeps its own
     // in its header while playing (both share the same stored preference).
@@ -216,7 +420,7 @@ export class QuizLibrary {
     const shell = el("div", { class: "kq-lib" });
     shell.append(
       el("div", { class: "kq-lib-head" },
-        el("h2", { class: "kq-title", text: this.options.title ?? "My quizzes" }),
+        this.renderHeading(),
         this.renderHeadControls(),
       ),
     );
@@ -224,6 +428,24 @@ export class QuizLibrary {
     if (this.error) shell.append(el("div", { class: "kq-error", text: this.error }));
     shell.append(this.renderList());
     this.root.append(shell);
+  }
+
+  /** The title at the root, or a `root ▸ folder` breadcrumb inside a folder. */
+  private renderHeading(): HTMLElement {
+    const rootTitle = this.options.title ?? "My quizzes";
+    const folder = this.currentFolderId
+      ? this.folders.find((f) => f.id === this.currentFolderId)
+      : null;
+    if (!folder) return el("h2", { class: "kq-title", text: rootTitle });
+    return el("div", { class: "kq-crumbs" },
+      el("button", {
+        type: "button",
+        class: "kq-crumb-link",
+        onclick: () => this.openFolder(null),
+      }, rootTitle),
+      el("span", { class: "kq-crumb-sep", text: "▸" }),
+      el("h2", { class: "kq-title kq-crumb-current", text: folder.name }),
+    );
   }
 
   /** ⛶ fullscreen + ☀/🌙 theme toggle, shown from the start (not only while playing). */
@@ -255,6 +477,7 @@ export class QuizLibrary {
     const file = el("input", {
       type: "file",
       accept: ".yaml,.yml,.json,.txt",
+      multiple: true,
       class: "kq-file",
       onchange: (e: Event) => this.onFile(e),
     }) as HTMLInputElement;
@@ -267,6 +490,7 @@ export class QuizLibrary {
         onclick: () => {
           this.pasteOpen = !this.pasteOpen;
           this.promptOpen = false;
+          this.newFolderOpen = false;
           this.error = null;
           this.render();
         },
@@ -277,12 +501,62 @@ export class QuizLibrary {
         onclick: () => {
           this.promptOpen = !this.promptOpen;
           this.pasteOpen = false;
+          this.newFolderOpen = false;
           this.error = null;
           this.render();
         },
       }, this.promptOpen ? "Cancel" : "✨ Create with AI"),
     );
+
+    // Folders live at the root only (one level deep), so the "New folder" control
+    // shows there; inside a folder we offer a one-click ZIP download instead.
+    if (this.currentFolderId === null) {
+      actions.append(
+        el("button", {
+          type: "button",
+          class: "kq-btn",
+          onclick: () => {
+            this.newFolderOpen = !this.newFolderOpen;
+            this.pasteOpen = false;
+            this.promptOpen = false;
+            this.error = null;
+            this.render();
+          },
+        }, this.newFolderOpen ? "Cancel" : "📁 New folder"),
+      );
+    } else {
+      const folder = this.folders.find((f) => f.id === this.currentFolderId);
+      if (folder && this.quizzesIn(folder.id).length) {
+        actions.append(
+          el("button", {
+            type: "button",
+            class: "kq-btn",
+            onclick: () => this.downloadFolderZip(folder),
+          }, "⬇ Download folder (.zip)"),
+        );
+      }
+    }
     wrap.append(actions);
+
+    if (this.newFolderOpen) {
+      const name = el("input", {
+        class: "kq-text",
+        placeholder: "Folder name",
+        onkeydown: (e: KeyboardEvent) => {
+          if (e.key === "Enter") this.addFolder(name.value);
+        },
+      }) as HTMLInputElement;
+      wrap.append(
+        el("div", { class: "kq-paste" },
+          name,
+          el("button", {
+            type: "button",
+            class: "kq-btn kq-btn-primary",
+            onclick: () => this.addFolder(name.value),
+          }, "Create folder"),
+        ),
+      );
+    }
 
     if (this.promptOpen) wrap.append(this.renderPromptTool());
 
@@ -308,19 +582,19 @@ export class QuizLibrary {
 
   private onFile(event: Event): void {
     const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-    const format: "yaml" | "json" = /\.json$/i.test(file.name) ? "json" : "yaml";
-    const reader = new FileReader();
-    reader.onload = () => {
-      this.save(String(reader.result ?? ""), format);
-      input.value = "";
-    };
-    reader.onerror = () => {
-      this.error = "Could not read the file.";
-      this.render();
-    };
-    reader.readAsText(file);
+    const files = input.files ? Array.from(input.files) : [];
+    if (!files.length) return;
+    Promise.all(files.map((f) => readFileText(f))).then(
+      (entries) => {
+        this.saveMany(entries);
+        input.value = "";
+      },
+      () => {
+        this.error = "Could not read one of the files.";
+        input.value = "";
+        this.render();
+      },
+    );
   }
 
   /**
@@ -402,48 +676,130 @@ export class QuizLibrary {
   }
 
   private renderList(): HTMLElement {
-    if (!this.quizzes.length) {
+    // Inside a folder: just its quizzes (with a back-to-root control).
+    if (this.currentFolderId !== null) {
+      const quizzes = this.quizzesIn(this.currentFolderId);
+      if (!quizzes.length) {
+        return el("div", { class: "kq-lib-empty" },
+          el("p", { text: "This folder is empty. Upload or paste a quiz to add it here." }),
+        );
+      }
+      const list = el("div", { class: "kq-lib-list" });
+      for (const quiz of quizzes) list.append(this.renderItem(quiz));
+      return list;
+    }
+
+    // Root: folders first, then loose quizzes.
+    const loose = this.quizzesIn(null);
+    if (!this.folders.length && !loose.length) {
       return el("div", { class: "kq-lib-empty" },
         el("p", { text: "No saved quizzes yet. Upload a .yaml file or paste one to get started." }),
       );
     }
     const list = el("div", { class: "kq-lib-list" });
-    for (const quiz of this.quizzes) list.append(this.renderItem(quiz));
+    for (const folder of this.folders) list.append(this.renderFolder(folder));
+    for (const quiz of loose) list.append(this.renderItem(quiz));
     return list;
   }
 
-  private renderItem(quiz: StoredQuiz): HTMLElement {
-    const item = el("div", { class: "kq-lib-item" });
-    item.append(
+  private renderFolder(folder: StoredFolder): HTMLElement {
+    const count = this.quizzesIn(folder.id).length;
+    return el("div", { class: "kq-lib-item kq-folder-item" },
       el("div", { class: "kq-lib-item-row" },
-        el("div", { class: "kq-lib-info" },
-          el("div", { class: "kq-lib-title", text: quiz.title }),
-          el("div", { class: "kq-lib-sub", text: `${quiz.count} question${quiz.count === 1 ? "" : "s"}` }),
+        el("button", {
+          type: "button",
+          class: "kq-folder-open",
+          onclick: () => this.openFolder(folder.id),
+        },
+          el("span", { class: "kq-folder-icon", text: "📁" }),
+          el("div", { class: "kq-lib-info" },
+            el("div", { class: "kq-lib-title", text: folder.name }),
+            el("div", { class: "kq-lib-sub", text: `${count} quiz${count === 1 ? "" : "zes"}` }),
+          ),
         ),
         el("div", { class: "kq-lib-item-actions" },
-          el("button", { type: "button", class: "kq-btn kq-btn-primary", onclick: () => this.play(quiz.id) }, "▶ Play"),
           el("button", {
             type: "button",
             class: "kq-icon-btn",
-            title: "Settings",
-            "aria-label": "Settings",
-            onclick: () => {
-              this.settingsFor = this.settingsFor === quiz.id ? null : quiz.id;
-              this.render();
-            },
-          }, "⚙"),
+            title: "Download folder (.zip)",
+            "aria-label": "Download folder as zip",
+            disabled: count === 0,
+            onclick: () => this.downloadFolderZip(folder),
+          }, "⬇"),
           el("button", {
             type: "button",
             class: "kq-icon-btn",
-            title: "Delete",
-            "aria-label": "Delete",
+            title: "Rename folder",
+            "aria-label": "Rename folder",
+            onclick: () => this.renameFolder(folder.id),
+          }, "✎"),
+          el("button", {
+            type: "button",
+            class: "kq-icon-btn",
+            title: "Delete folder",
+            "aria-label": "Delete folder",
             onclick: () => {
-              if (confirmDelete(quiz.title)) this.remove(quiz.id);
+              if (confirmDeleteFolder(folder.name, count)) this.deleteFolder(folder.id);
             },
           }, "🗑"),
         ),
       ),
     );
+  }
+
+  private renderItem(quiz: StoredQuiz): HTMLElement {
+    // Title/count on top, actions on their own row below — so a long title never
+    // gets crowded or truncated behind the buttons (matters most on mobile).
+    const item = el("div", { class: "kq-lib-item" });
+    item.append(
+      el("div", { class: "kq-lib-info" },
+        el("div", { class: "kq-lib-title", text: quiz.title }),
+        el("div", { class: "kq-lib-sub", text: this.subLine(quiz) }),
+      ),
+      el("div", { class: "kq-lib-item-actions kq-lib-actions-row" },
+        el("button", { type: "button", class: "kq-btn kq-btn-primary", onclick: () => this.play(quiz.id) }, "▶ Play"),
+        this.renderMoveSelect(quiz),
+        el("button", {
+          type: "button",
+          class: "kq-icon-btn",
+          title: "View results",
+          "aria-label": "View results",
+          onclick: () => {
+            this.resultsFor = this.resultsFor === quiz.id ? null : quiz.id;
+            this.expandedAttempt = null;
+            this.render();
+          },
+        }, "📊"),
+        el("button", {
+          type: "button",
+          class: "kq-icon-btn",
+          title: "Download quiz",
+          "aria-label": "Download quiz",
+          onclick: () => this.downloadQuiz(quiz),
+        }, "⬇"),
+        el("button", {
+          type: "button",
+          class: "kq-icon-btn",
+          title: "Settings",
+          "aria-label": "Settings",
+          onclick: () => {
+            this.settingsFor = this.settingsFor === quiz.id ? null : quiz.id;
+            this.render();
+          },
+        }, "⚙"),
+        el("button", {
+          type: "button",
+          class: "kq-icon-btn",
+          title: "Delete",
+          "aria-label": "Delete",
+          onclick: () => {
+            if (confirmDelete(quiz.title)) this.remove(quiz.id);
+          },
+        }, "🗑"),
+      ),
+    );
+
+    if (this.resultsFor === quiz.id) item.append(this.renderResultsPanel(quiz));
 
     if (this.settingsFor === quiz.id) {
       item.append(
@@ -465,6 +821,144 @@ export class QuizLibrary {
     }
     return item;
   }
+
+  /** Sub-title line: question count, plus a play summary once there is history. */
+  private subLine(quiz: StoredQuiz): string {
+    const questions = `${quiz.count} question${quiz.count === 1 ? "" : "s"}`;
+    const summary = summarize(attemptsFor(this.storageKey, quiz.id));
+    if (!summary.count) return questions;
+    const plays = `${summary.count} attempt${summary.count === 1 ? "" : "s"}`;
+    return `${questions} · avg ${summary.averagePct}% · ${plays}`;
+  }
+
+  /** The per-quiz results panel: summary, weakest topic, and each execution. */
+  private renderResultsPanel(quiz: StoredQuiz): HTMLElement {
+    const panel = el("div", { class: "kq-results-panel" });
+    const attempts = attemptsFor(this.storageKey, quiz.id);
+
+    if (!attempts.length) {
+      panel.append(
+        el("p", { class: "kq-results-empty", text: "No attempts yet. Play the quiz to record your results." }),
+      );
+      return panel;
+    }
+
+    const summary = summarize(attempts);
+    panel.append(
+      el("div", { class: "kq-results-summary" },
+        el("span", { text: `${summary.count} attempt${summary.count === 1 ? "" : "s"}` }),
+        el("span", { text: `avg ${summary.averagePct}%` }),
+        el("span", { text: `best ${summary.bestPct}%` }),
+        el("span", { text: `last ${summary.lastPct}%` }),
+      ),
+    );
+
+    // Weakest topic across the learner's whole history for this quiz.
+    const aggregate = aggregateByCategory(attempts);
+    if (hasTopics(aggregate)) {
+      const weakest = weakestCategory(aggregate);
+      if (weakest) {
+        const name = weakest.label ?? weakest.categoryId ?? "Uncategorized";
+        panel.append(
+          el("div", { class: "kq-focus" },
+            el("span", { class: "kq-focus-label", text: "Focus on: " }),
+            el("span", { text: `${name} (${Math.round(weakest.accuracy * 100)}%)` }),
+          ),
+        );
+      }
+    }
+
+    // Executions, newest first; a row expands to its per-topic breakdown.
+    const list = el("div", { class: "kq-attempt-list" });
+    for (const attempt of [...attempts].reverse()) {
+      list.append(this.renderAttemptRow(attempt));
+    }
+    panel.append(list);
+
+    panel.append(
+      el("div", { class: "kq-results-actions" },
+        el("button", {
+          type: "button",
+          class: "kq-btn",
+          onclick: () => {
+            if (confirmClearHistory(quiz.title)) {
+              clearAttempts(this.storageKey, quiz.id);
+              this.expandedAttempt = null;
+              this.render();
+            }
+          },
+        }, "Clear history"),
+      ),
+    );
+    return panel;
+  }
+
+  private renderAttemptRow(attempt: StoredAttempt): HTMLElement {
+    const pct = Math.round(attempt.ratio * 100);
+    const expanded = this.expandedAttempt === attempt.at;
+    const wrap = el("div", { class: "kq-attempt" });
+
+    wrap.append(
+      el("button", {
+        type: "button",
+        class: "kq-attempt-row",
+        "aria-expanded": expanded ? "true" : "false",
+        onclick: () => {
+          this.expandedAttempt = expanded ? null : attempt.at;
+          this.render();
+        },
+      },
+        el("span", { class: "kq-attempt-date", text: formatDate(attempt.at) }),
+        el("span", { class: "kq-attempt-score" },
+          attempt.passed !== null
+            ? el("span", { class: `kq-badge ${attempt.passed ? "kq-pass" : "kq-fail"}`, text: attempt.passed ? "Passed" : "Not passed" })
+            : null,
+          el("span", { text: `${pct}%` }),
+        ),
+      ),
+    );
+
+    if (expanded && hasTopics(attempt.byCategory)) {
+      const table = el("table", { class: "kq-cat-table kq-attempt-detail" });
+      table.append(
+        el("thead", {}, el("tr", {}, el("th", { text: "Topic" }), el("th", { text: "Score" }))),
+      );
+      const tbody = el("tbody");
+      for (const c of attempt.byCategory) {
+        const name = c.label ?? c.categoryId ?? "Uncategorized";
+        tbody.append(
+          el("tr", {},
+            el("td", { text: name }),
+            el("td", { text: `${c.correct}/${c.total} (${Math.round(c.accuracy * 100)}%)` }),
+          ),
+        );
+      }
+      table.append(tbody);
+      wrap.append(table);
+    }
+    return wrap;
+  }
+
+  /** A `Move to…` dropdown listing the root plus every folder. */
+  private renderMoveSelect(quiz: StoredQuiz): HTMLElement {
+    const current = quiz.folderId ?? "";
+    const select = el("select", {
+      class: "kq-select kq-lib-move",
+      title: "Move to folder",
+      "aria-label": "Move to folder",
+      onchange: (e: Event) => {
+        const value = (e.target as HTMLSelectElement).value;
+        this.moveQuiz(quiz.id, value || null);
+      },
+    }) as HTMLSelectElement;
+    select.append(el("option", { value: "", selected: current === "" }, "📂 Root"));
+    for (const folder of this.folders) {
+      select.append(
+        el("option", { value: folder.id, selected: current === folder.id }, `📁 ${folder.name}`),
+      );
+    }
+    return select;
+  }
 }
 
 /** Mount a quiz library into `target` (an element, a CSS selector, or a bare id). */
@@ -474,6 +968,26 @@ export function library(target: string | HTMLElement, options: LibraryOptions = 
 
 function makeId(): string {
   return `q_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/** Read a picked file as text, resolving with its source and inferred format. */
+function readFileText(file: File): Promise<{ source: string; format: "yaml" | "json" }> {
+  const format: "yaml" | "json" = /\.json$/i.test(file.name) ? "json" : "yaml";
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve({ source: String(reader.result ?? ""), format });
+    reader.onerror = () => reject(reader.error ?? new Error("read failed"));
+    reader.readAsText(file);
+  });
+}
+
+/** Human-friendly date+time for an execution row (locale-aware, best-effort). */
+function formatDate(at: number): string {
+  try {
+    return new Date(at).toLocaleString();
+  } catch {
+    return new Date(at).toISOString();
+  }
 }
 
 /**
@@ -526,6 +1040,21 @@ function describeError(err: unknown): string {
 function confirmDelete(title: string): boolean {
   if (typeof confirm === "function") {
     return confirm(`Delete “${title}”? This only removes it from this browser.`);
+  }
+  return true;
+}
+
+function confirmDeleteFolder(name: string, count: number): boolean {
+  if (typeof confirm !== "function") return true;
+  const note = count
+    ? ` Its ${count} quiz${count === 1 ? "" : "zes"} will be moved back out of the folder, not deleted.`
+    : "";
+  return confirm(`Delete folder “${name}”?${note}`);
+}
+
+function confirmClearHistory(title: string): boolean {
+  if (typeof confirm === "function") {
+    return confirm(`Clear all saved results for “${title}”? This can't be undone.`);
   }
   return true;
 }
