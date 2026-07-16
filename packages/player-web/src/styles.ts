@@ -25,6 +25,7 @@ const CSS = `
   --kq-radius: 12px;
 
   box-sizing: border-box;
+  container-type: inline-size;
   color: var(--kq-fg);
   background: var(--kq-bg);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -95,7 +96,14 @@ const CSS = `
 .kq-blank-key { color: var(--kq-muted); font-weight: 600; }
 
 .kq-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.5rem 0.7rem; border: 1px solid var(--kq-border); border-radius: 10px; }
-.kq-row-label { flex: 1; }
+.kq-row-label { flex: 1; min-width: 0; }
+.kq-row .kq-select { flex: none; max-width: 60%; }
+/* narrow players (mobile, or a slim embed): stack the label above its select so long
+   clause text isn't crushed into a sliver next to the dropdown */
+@container (max-width: 460px) {
+  .kq-row { flex-direction: column; align-items: stretch; gap: 0.4rem; }
+  .kq-row .kq-select { max-width: none; width: 100%; }
+}
 
 .kq-ordering { list-style: decimal inside; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
 .kq-ordering-item { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.5rem 0.7rem; border: 1px solid var(--kq-border); border-radius: 10px; }
@@ -207,7 +215,7 @@ const CSS = `
 .kq-lib-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kq-lib-sub { color: var(--kq-muted); font-size: 0.82rem; margin-top: 0.1rem; }
 .kq-lib-item-actions { display: flex; align-items: center; gap: 0.4rem; flex: none; flex-wrap: wrap; justify-content: flex-end; }
-.kq-lib-bar { margin-bottom: 1rem; }
+.kq-lib-bar { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 1rem; }
 .kq-lib-move { padding: 0.35rem 0.5rem; font-size: 0.82rem; max-width: 9rem; }
 /* quiz actions sit on their own row beneath the title (keeps long titles readable) */
 .kq-lib-actions-row { margin-top: 0.6rem; justify-content: flex-start; }

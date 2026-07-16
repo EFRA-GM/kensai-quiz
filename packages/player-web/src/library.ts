@@ -82,10 +82,13 @@ const DEFAULT_EDITABLE: EditableSettingKey[] = [
   "time_limit",
 ];
 
-/** Study-friendly defaults for quizzes added through the playground. */
+/** Study-friendly defaults for quizzes added through the playground. Shuffle is on
+ *  (question order + answer options) so repeated attempts aren't memorized by position. */
 const DEFAULT_LIBRARY_SETTINGS: Partial<ResolvedSettings> = {
   navigation: "sequential",
   feedback: "immediate",
+  order: "random",
+  shuffle_options: true,
 };
 
 /**
@@ -375,11 +378,23 @@ export class QuizLibrary {
       this.backToList();
       return;
     }
-    this.root.append(
-      el("div", { class: "kq-lib-bar" },
-        el("button", { type: "button", class: "kq-btn", onclick: () => this.backToList() }, "← Library"),
-      ),
+    const bar = el("div", { class: "kq-lib-bar" },
+      el("button", { type: "button", class: "kq-btn", onclick: () => this.backToList() }, "← Library"),
     );
+    // The ⛶ toggle lives here (not in the nested player) so it fullscreens the whole
+    // library root — keeping the "← Library" button reachable while in fullscreen.
+    if (this.options.fullscreen !== false && fullscreenSupported()) {
+      bar.append(
+        el("button", {
+          type: "button",
+          class: "kq-icon-btn",
+          title: "Toggle fullscreen",
+          "aria-label": "Toggle fullscreen",
+          onclick: () => this.toggleFullscreen(),
+        }, "⛶"),
+      );
+    }
+    this.root.append(bar);
     const mount = el("div", { class: "kq-lib-player" });
     this.root.append(mount);
     const quizId = quiz.id;
@@ -391,7 +406,8 @@ export class QuizLibrary {
       editableSettings: this.editableKeys(),
       views: this.options.views,
       editableViews: this.options.editableViews,
-      fullscreen: this.options.fullscreen,
+      // Fullscreen is owned by the library bar above (so the back button stays visible).
+      fullscreen: false,
       now: this.options.now,
       rng: this.options.rng,
       onFinish: (result) => this.onAttemptFinished(quizId, result),

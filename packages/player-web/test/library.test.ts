@@ -138,6 +138,26 @@ describe("folders", () => {
   });
 });
 
+/* ------------------------------------------------------- default settings */
+
+describe("default quiz settings", () => {
+  it("shuffles questions and options by default for newly added quizzes", () => {
+    const lib = mount();
+    lib.addQuiz(quizYaml("Fresh"));
+    const stored = readStored()[0];
+    expect(stored.settings.order).toBe("random");
+    expect(stored.settings.shuffle_options).toBe(true);
+  });
+
+  it("lets a developer override the defaults via defaultSettings", () => {
+    const lib = library(host, { validate: false, defaultSettings: { order: "fixed" } });
+    lib.addQuiz(quizYaml("Fresh"));
+    const stored = readStored()[0];
+    expect(stored.settings.order).toBe("fixed");
+    expect(stored.settings.shuffle_options).toBeUndefined();
+  });
+});
+
 /* ------------------------------------------------------- backward compat */
 
 describe("backward compatibility", () => {
