@@ -103,6 +103,11 @@ const CSS = `
 .kq-move { border: 1px solid var(--kq-border); background: var(--kq-bg); border-radius: 8px; width: 2rem; height: 2rem; cursor: pointer; font-size: 0.8rem; }
 .kq-move:disabled { opacity: 0.35; cursor: default; }
 
+/* ordering "word bank" variant: tap chips from the bank into the answer line, tap to remove */
+.kq-wordbank { display: flex; flex-direction: column; gap: 0.75rem; }
+.kq-wb-answer { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; min-height: 2.6rem; padding: 0.5rem; border-bottom: 2px solid var(--kq-border); }
+.kq-wb-bank { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; min-height: 2.6rem; padding: 0.5rem; border: 1px dashed var(--kq-border); border-radius: 10px; }
+
 /* view toggle: switch a question type's presentation (e.g. classify dropdown ⇄ word bank) */
 .kq-view-toggle { display: inline-flex; margin-bottom: 0.75rem; border: 1px solid var(--kq-border); border-radius: 10px; overflow: hidden; }
 .kq-view-btn { font: inherit; font-size: 0.82rem; padding: 0.3rem 0.7rem; border: 0; background: var(--kq-bg); color: var(--kq-muted); cursor: pointer; }

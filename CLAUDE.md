@@ -97,7 +97,8 @@ reflected in `spec/` and `packages/core`.
   HTML first — keep that invariant when touching rendering.
 - **View variants**: a question type may offer more than one presentation, declared in
   `VIEW_VARIANTS` (`src/views.ts`; e.g. `classify` = `dropdown` | `buckets`, the tap-to-place
-  "word bank"). A variant is just another builder that keeps the same
+  "word bank"; `ordering` = `word_bank` (default) | `arrows`, a Duolingo-style tap-to-place
+  answer line vs. the ▲/▼ reorder list). A variant is just another builder that keeps the same
   `getAnswer`/`setAnswer`/`setDisabled` contract, so core scoring is untouched. The player
   resolves the active variant as: learner's saved per-quiz choice → developer default
   (`PlayerOptions.views`) → first variant. Learner switching is on by default and can be
