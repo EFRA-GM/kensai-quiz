@@ -62,6 +62,18 @@ reflected in `spec/` and `packages/core`.
   ⛶ fullscreen toggle and a ☀/🌙 light-dark theme toggle (`src/theme.ts`, remembered in
   `localStorage`; applied as a `.kq-theme-{light,dark}` class that cascades into nested
   `.kq-root`). In the library these controls sit in the header from the start.
+- **Library organization (UI-only)**: the playground supports **one-level folders**
+  (file-explorer navigation with a `root ▸ folder` breadcrumb). A `StoredQuiz` carries an
+  optional `folderId` (absent/`null` = loose at root); folders are a separate
+  `StoredFolder[]` persisted under `` `${storageKey}:folders` `` — existing flat arrays load
+  unchanged (no migration). Upload/paste/AI save into the folder currently being viewed;
+  quizzes move between folders via a per-item `Move to…` select; deleting a folder re-homes
+  its quizzes to root rather than deleting them. **Upload accepts multiple files at once**
+  (`saveMany` batches parse + one render). **Downloads** re-serve the stored raw `source`
+  (no serializer): a single quiz downloads as its `.yaml`/`.json`, and a folder downloads as
+  a **single `.zip`** built by a dependency-free STORE-method writer (`src/zip.ts`, CRC32 +
+  zip records) via `src/download.ts` (`Blob` + `<a download>`). All of this is a player
+  concern — spec/schema/core stay UI-agnostic and gain no dependency.
 - Built with **tsup** into two shapes: npm (ESM/CJS + `.d.ts`, core kept external) and a
   self-contained CDN IIFE (`dist/kensai-quiz-player.global.js`, exposes `window.KensaiQuiz`,
   bundles everything). Build core first (`pnpm -r build` handles ordering).

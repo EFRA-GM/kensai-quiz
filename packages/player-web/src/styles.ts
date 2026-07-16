@@ -201,8 +201,22 @@ const CSS = `
 .kq-lib-info { min-width: 0; }
 .kq-lib-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kq-lib-sub { color: var(--kq-muted); font-size: 0.82rem; margin-top: 0.1rem; }
-.kq-lib-item-actions { display: flex; align-items: center; gap: 0.4rem; flex: none; }
+.kq-lib-item-actions { display: flex; align-items: center; gap: 0.4rem; flex: none; flex-wrap: wrap; justify-content: flex-end; }
 .kq-lib-bar { margin-bottom: 1rem; }
+.kq-lib-move { padding: 0.35rem 0.5rem; font-size: 0.82rem; max-width: 9rem; }
+
+/* breadcrumb (root ▸ folder) shown while inside a folder */
+.kq-crumbs { display: flex; align-items: center; gap: 0.4rem; min-width: 0; flex-wrap: wrap; }
+.kq-crumb-link { border: 0; background: none; padding: 0; cursor: pointer; color: var(--kq-accent); font: inherit; font-weight: 600; }
+.kq-crumb-link:hover { text-decoration: underline; }
+.kq-crumb-sep { color: var(--kq-muted); }
+.kq-crumb-current { margin: 0; }
+
+/* folder rows: a clickable open target plus row actions */
+.kq-folder-item .kq-lib-item-row { gap: 0.5rem; }
+.kq-folder-open { display: flex; align-items: center; gap: 0.6rem; flex: 1 1 auto; min-width: 0; border: 0; background: none; padding: 0; cursor: pointer; color: inherit; font: inherit; text-align: left; }
+.kq-folder-open:hover .kq-lib-title { color: var(--kq-accent); }
+.kq-folder-icon { font-size: 1.2rem; flex: none; }
 
 /* Theme: OS preference by default; an explicit .kq-theme-* class (set by the
    toggle) wins and cascades into any nested .kq-root (player inside the library). */
